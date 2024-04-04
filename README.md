@@ -34,27 +34,6 @@ uring = IO_Uring.new # this sets up one io_uring
 uring.accept(server) # this sends a command to create a accept socket
 
 while true
-  uring.wait do |type, userdata|
-    case type
-    when :socket
-      socket, error = userdata
-    when :accept
-      socket, addrlist, error = userdata
-      uring.accept(server)
-      uring.recv(socket)
-    when :recv
-      socket, buff, error = userdata
-      uring.send(socket, response)
-    when :send
-      socket, send, error = userdata
-      uring.close(socket)
-    when :close
-      socket, error = userdata
-    end
-  end
-end
-
-while true
   uring.wait do |type, userdata| # this function tells you when a command has finished and gives you back its reply.
     case type
     when :socket
