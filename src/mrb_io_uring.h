@@ -15,12 +15,13 @@
 #include <unistd.h>
 #include <err.h>
 #include <stdlib.h>
+#include <assert.h>
 
 # define likely(x) __builtin_expect(!!(x), 1)
 # define unlikely(x) __builtin_expect(!!(x), 0)
 
 enum userdata_types {
-  TCPSERVER,
+  SOCKET,
   ACCEPT,
   RECV,
   SEND,
@@ -30,8 +31,6 @@ enum userdata_types {
 typedef struct {
   enum userdata_types type;
   mrb_value type_sym;
-  int socket;
-  int port;
   struct sockaddr_storage sa;
   socklen_t salen;
 } mrb_io_uring_userdata_t;

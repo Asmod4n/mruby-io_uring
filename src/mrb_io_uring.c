@@ -7,7 +7,7 @@ mrb_io_uring_queue_init(mrb_state *mrb, mrb_value self)
   memset(ring, 0, sizeof(*ring));
   mrb_data_init(self, ring, &mrb_io_uring_queue_type);
 
-  mrb_int entries = 512, flags = 0;
+  mrb_int entries = 2048, flags = 0;
   mrb_get_args(mrb, "|ii", &entries, &flags);
 
   int ret = io_uring_queue_init(entries, ring, flags);
@@ -30,12 +30,12 @@ mrb_io_uring_get_sqe(mrb_state *mrb, struct io_uring *ring)
   return sqe;
 }
 
-MRB_INLINE mrb_value
+static mrb_value
 mrb_io_uring_submit(mrb_state *mrb, mrb_value self, struct io_uring *ring, struct io_uring_sqe *sqe, mrb_value obj, mrb_value userdata)
 {
   io_uring_sqe_set_data(sqe, mrb_ptr(userdata));
   int ret = io_uring_submit(ring);
-  if (unlikely(ret <= 0)) {
+  if (unlikely(ret < 0)) {
     errno = -ret;
     mrb_sys_fail(mrb, "io_uring_submit");
   }
@@ -46,38 +46,19 @@ mrb_io_uring_submit(mrb_state *mrb, mrb_value self, struct io_uring *ring, struc
 }
 
 static mrb_value
-mrb_io_socket_class_init(mrb_state *mrb, mrb_value self)
-{
-  mrb_value sock;
-  mrb_get_args(mrb, "o", &sock);
-  if(unlikely(!mrb_fixnum_p(sock))) {
-    mrb_raise(mrb, E_TYPE_ERROR, "not a socket");
-  }
-
-  int *socket = mrb_realloc(mrb, DATA_PTR(self), sizeof(int));
-  mrb_int s = mrb_fixnum(sock);
-  memcpy(socket, &s, sizeof(int));
-  
-  mrb_data_init(self, socket, &mrb_io_uring_socket_type);
-  mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@fileno"), sock);
-
-  return self;
-}
-
-static mrb_value
 mrb_io_uring_prep_socket(mrb_state *mrb, mrb_value self)
 {
-  mrb_int port, domain = AF_INET, type = SOCK_STREAM, protocol = 0 , flags = 0;
-  mrb_get_args(mrb, "i|iiii", &port, &domain, &type, &protocol, &flags);
-
   struct io_uring *ring = (struct io_uring *) DATA_PTR(self);
   struct io_uring_sqe *sqe = mrb_io_uring_get_sqe(mrb, ring);
-  mrb_value port_val = mrb_int_value(mrb, port);
-  mrb_value userdata = mrb_obj_new(mrb, mrb_class_get_under(mrb, mrb_class(mrb, self), "SocketUserData"), 1, &port_val);
+
+  mrb_int domain = AF_INET, type = SOCK_STREAM, protocol = 0 , flags = 0;
+  mrb_get_args(mrb, "|iiii",&domain, &type, &protocol, &flags);
+
+  mrb_value userdata = mrb_obj_new(mrb, mrb_class_get_under(mrb, mrb_class(mrb, self), "SocketUserData"), 0, NULL);
 
   io_uring_prep_socket(sqe, domain, type, protocol, flags);
 
-  return mrb_io_uring_submit(mrb, self, ring, sqe, port_val, userdata);
+  return mrb_io_uring_submit(mrb, self, ring, sqe, mrb_true_value(), userdata);
 }
 
 static mrb_value
@@ -85,6 +66,7 @@ mrb_io_uring_prep_accept(mrb_state *mrb, mrb_value self)
 {
   struct io_uring *ring = (struct io_uring *) DATA_PTR(self);
   struct io_uring_sqe *sqe = mrb_io_uring_get_sqe(mrb, ring);
+
   mrb_value sock;
   mrb_int flags = 0;
   mrb_get_args(mrb, "o|i", &sock, &flags);
@@ -144,19 +126,31 @@ mrb_io_uring_prep_send(mrb_state *mrb, mrb_value self)
 }
 
 static mrb_value
+mrb_io_uring_prep_close(mrb_state *mrb, mrb_value self)
+{
+  struct io_uring *ring = (struct io_uring *) DATA_PTR(self);
+  struct io_uring_sqe *sqe = mrb_io_uring_get_sqe(mrb, ring);
+
+  mrb_value sock;
+  mrb_get_args(mrb, "o", &sock);
+  mrb_value socket = mrb_check_convert_type(mrb, sock, MRB_TT_INTEGER, "Integer", "fileno");
+  if(unlikely(!mrb_fixnum_p(socket))) {
+    mrb_raise(mrb, E_TYPE_ERROR, "not a socket");
+  }
+
+  mrb_value userdata = mrb_obj_new(mrb, mrb_class_get_under(mrb, mrb_class(mrb, self), "CloseUserData"), 1, &sock);
+  io_uring_prep_close(sqe, mrb_fixnum(socket));
+
+  return mrb_io_uring_submit(mrb, self, ring, sqe, sock, userdata);
+}
+
+static mrb_value
 mrb_io_uring_socket_userdata_init(mrb_state *mrb, mrb_value self)
 {
-  mrb_int port;
-  mrb_get_args(mrb, "i", &port);
-
   mrb_io_uring_userdata_t *userdata = mrb_realloc(mrb, DATA_PTR(self), sizeof(*userdata));
   mrb_data_init(self, userdata, &mrb_io_uring_userdata_type);
-  userdata->type = TCPSERVER;
-  userdata->type_sym = mrb_symbol_value(mrb_intern_lit(mrb, "tcpserver"));
-  userdata->socket = 0;
-  userdata->port = port;
-  memset(&userdata->sa, '\0', sizeof(struct sockaddr_storage));
-  userdata->salen = 0;
+  userdata->type = SOCKET;
+  userdata->type_sym = mrb_symbol_value(mrb_intern_lit(mrb, "socket"));
 
   return self;
 }
@@ -175,16 +169,12 @@ mrb_io_uring_accept_userdata_init(mrb_state *mrb, mrb_value self)
   mrb_data_init(self, userdata, &mrb_io_uring_userdata_type);
   userdata->type = ACCEPT;
   userdata->type_sym = mrb_symbol_value(mrb_intern_lit(mrb, "accept"));
-  userdata->socket = mrb_fixnum(socket);
-  userdata->port = 0;
-  memset(&userdata->sa, '\0', sizeof(struct sockaddr_storage));
   userdata->salen = sizeof(struct sockaddr_storage);
 
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "sock"), sock);
 
   return self;
 }
-
 
 static mrb_value
 mrb_io_uring_recv_userdata_init(mrb_state *mrb, mrb_value self)
@@ -200,10 +190,6 @@ mrb_io_uring_recv_userdata_init(mrb_state *mrb, mrb_value self)
   mrb_data_init(self, userdata, &mrb_io_uring_userdata_type);
   userdata->type = RECV;
   userdata->type_sym = mrb_symbol_value(mrb_intern_lit(mrb, "recv"));
-  userdata->socket = mrb_fixnum(socket);
-  userdata->port = 0;
-  memset(&userdata->sa, '\0', sizeof(struct sockaddr_storage));
-  userdata->salen = 0;
 
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "sock"), sock);
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "buf"), buf);
@@ -225,10 +211,6 @@ mrb_io_uring_send_userdata_init(mrb_state *mrb, mrb_value self)
   mrb_data_init(self, userdata, &mrb_io_uring_userdata_type);
   userdata->type = SEND;
   userdata->type_sym = mrb_symbol_value(mrb_intern_lit(mrb, "send"));
-  userdata->socket = mrb_fixnum(socket);
-  userdata->port = 0;
-  memset(&userdata->sa, '\0', sizeof(struct sockaddr_storage));
-  userdata->salen = 0;
 
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "sock"), sock);
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "buf"), buf);
@@ -236,32 +218,24 @@ mrb_io_uring_send_userdata_init(mrb_state *mrb, mrb_value self)
   return self;
 }
 
-void setup_listening_socket(int sock, int port) {
-    struct sockaddr_in srv_addr;
+static mrb_value
+mrb_io_uring_close_userdata_init(mrb_state *mrb, mrb_value self)
+{
+  mrb_value sock;
+  mrb_get_args(mrb, "o", &sock);
+  mrb_value socket = mrb_check_convert_type(mrb, sock, MRB_TT_INTEGER, "Integer", "fileno");
+  if(unlikely(!mrb_fixnum_p(socket))) {
+    mrb_raise(mrb, E_TYPE_ERROR, "not a socket");
+  }
 
-    int enable = 1;
-    int rc = setsockopt(sock,
-                   SOL_SOCKET, SO_REUSEADDR,
-                   &enable, sizeof(int));
-    err(EXIT_FAILURE, NULL);
+  mrb_io_uring_userdata_t *userdata = mrb_realloc(mrb, DATA_PTR(self), sizeof(*userdata));
+  mrb_data_init(self, userdata, &mrb_io_uring_userdata_type);
+  userdata->type = CLOSE;
+  userdata->type_sym = mrb_symbol_value(mrb_intern_lit(mrb, "close"));
 
-    memset(&srv_addr, 0, sizeof(srv_addr));
-    srv_addr.sin_family = AF_INET;
-    srv_addr.sin_port = htons(port);
-    srv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+  mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "sock"), sock);
 
-    /* We bind to a port and turn this socket into a listening
-     * socket.
-     * */
-    rc = bind(sock,
-             (const struct sockaddr *)&srv_addr,
-             sizeof(srv_addr));
-
-    assert(rc == 0 && "bind");
-
-    rc = listen(sock, 1024);
-    assert(rc == 0 && "listen");
-
+  return self;
 }
 
 static mrb_value
@@ -311,33 +285,30 @@ mrb_io_uring_wait_cqe(mrb_state *mrb, mrb_value self)
   struct io_uring_cqe *cqe;
   int rc = io_uring_wait_cqe(DATA_PTR(self), &cqe);
   if (likely(rc == 0)) {
-    if(cqe->res < 0) {
+    if(unlikely(cqe->res < 0)) {
       errno = -cqe->res;
       mrb_sys_fail(mrb, "io_uring_wait_cqe");
     }
     mrb_value userdata = mrb_obj_value(io_uring_cqe_get_data(cqe));
     mrb_io_uring_userdata_t *userdata_t = DATA_PTR(userdata);
-    mrb_value ret = mrb_nil_value();
+    mrb_value ret;
 
     switch(userdata_t->type) {
-      case TCPSERVER: {
-        setup_listening_socket(cqe->res, userdata_t->port);
-        mrb_value sock = mrb_int_value(mrb, cqe->res);
-        ret = mrb_obj_new(mrb, mrb_class_get_under(mrb, mrb_class(mrb, self), "Socket"), 1, &sock);
+      case SOCKET: {
+        ret = mrb_int_value(mrb, cqe->res);
       } break;
       case ACCEPT: {
-        mrb_value sock = mrb_int_value(mrb, cqe->res);
-        ret = mrb_obj_new(mrb, mrb_class_get_under(mrb, mrb_class(mrb, self), "Socket"), 1, &sock);
-        //mrb_iv_set(mrb, ret, mrb_intern_lit(mrb, "@sa"), sa2addrlist(mrb, (struct sockaddr*)&userdata_t->sa, userdata_t->salen));
+        ret = mrb_assoc_new(mrb, mrb_int_value(mrb, cqe->res), sa2addrlist(mrb, (struct sockaddr*)&userdata_t->sa, userdata_t->salen));
       } break;
       case RECV: {
         mrb_value buf = mrb_iv_get(mrb, userdata, mrb_intern_lit(mrb, "buf"));
         mrb_str_resize(mrb, buf, cqe->res);
         ret = mrb_assoc_new(mrb, mrb_iv_get(mrb, userdata, mrb_intern_lit(mrb, "sock")), buf);        
       } break;
-      case SEND: {
+      case SEND:
+      case CLOSE:
         ret = mrb_assoc_new(mrb, mrb_iv_get(mrb, userdata, mrb_intern_lit(mrb, "sock")), mrb_int_value(mrb, cqe->res));
-      } break;
+      break;
     }
 
     mrb_value argv[] = {userdata_t->type_sym, ret};
@@ -355,22 +326,19 @@ mrb_io_uring_wait_cqe(mrb_state *mrb, mrb_value self)
 void
 mrb_mruby_io_uring_gem_init(mrb_state* mrb)
 { 
-  struct RClass *io_uring_class, *io_uring_error_class, *io_uring_socket_class, *io_uring_socket_userdata_class, *io_uring_accept_userdata_class, *io_uring_recv_userdata_class, *io_uring_send_userdata_class;
+  struct RClass *io_uring_class, *io_uring_error_class, *io_uring_socket_userdata_class, *io_uring_accept_userdata_class, *io_uring_recv_userdata_class, *io_uring_send_userdata_class, *io_uring_close_userdata_class;
   io_uring_class = mrb_define_class(mrb, "IO_Uring", mrb->object_class);
   MRB_SET_INSTANCE_TT(io_uring_class, MRB_TT_DATA);
   mrb_define_method(mrb, io_uring_class, "initialize",  mrb_io_uring_queue_init,    MRB_ARGS_OPT(2));
-  mrb_define_method(mrb, io_uring_class, "socket",  	  mrb_io_uring_prep_socket,   MRB_ARGS_REQ(5));
+  mrb_define_method(mrb, io_uring_class, "socket",  	  mrb_io_uring_prep_socket,   MRB_ARGS_OPT(4));
   mrb_define_method(mrb, io_uring_class, "accept",  	  mrb_io_uring_prep_accept,   MRB_ARGS_ARG(1, 1));
   mrb_define_method(mrb, io_uring_class, "recv",  	    mrb_io_uring_prep_recv,     MRB_ARGS_ARG(1, 2));
   mrb_define_method(mrb, io_uring_class, "send",  	    mrb_io_uring_prep_send,     MRB_ARGS_ARG(2, 1));
+  mrb_define_method(mrb, io_uring_class, "close",  	    mrb_io_uring_prep_close,    MRB_ARGS_REQ(1));
   mrb_define_method(mrb, io_uring_class, "wait",  	    mrb_io_uring_wait_cqe,      MRB_ARGS_NONE());
 
   io_uring_error_class = mrb_define_class_under(mrb, io_uring_class, "Error", E_RUNTIME_ERROR);
   mrb_define_class_under(mrb, io_uring_class, "SQRingFullError", io_uring_error_class);
-
-  io_uring_socket_class = mrb_define_class_under(mrb, io_uring_class, "Socket", mrb->object_class);
-  MRB_SET_INSTANCE_TT(io_uring_socket_class, MRB_TT_DATA);
-  mrb_define_method(mrb, io_uring_socket_class, "initialize", mrb_io_socket_class_init, MRB_ARGS_REQ(1));
 
   io_uring_socket_userdata_class = mrb_define_class_under(mrb, io_uring_class, "SocketUserData", mrb->object_class);
   MRB_SET_INSTANCE_TT(io_uring_socket_userdata_class, MRB_TT_DATA);
@@ -378,15 +346,19 @@ mrb_mruby_io_uring_gem_init(mrb_state* mrb)
 
   io_uring_accept_userdata_class = mrb_define_class_under(mrb, io_uring_class, "AcceptUserData", mrb->object_class);
   MRB_SET_INSTANCE_TT(io_uring_accept_userdata_class, MRB_TT_DATA);
-  mrb_define_method(mrb, io_uring_accept_userdata_class, "initialize", mrb_io_uring_accept_userdata_init, MRB_ARGS_REQ(1));
+  mrb_define_method(mrb, io_uring_accept_userdata_class, "initialize", mrb_io_uring_accept_userdata_init, MRB_ARGS_REQ(2));
 
   io_uring_recv_userdata_class = mrb_define_class_under(mrb, io_uring_class, "RecvUserData", mrb->object_class);
   MRB_SET_INSTANCE_TT(io_uring_recv_userdata_class, MRB_TT_DATA);
-  mrb_define_method(mrb, io_uring_recv_userdata_class, "initialize", mrb_io_uring_recv_userdata_init, MRB_ARGS_REQ(1));
+  mrb_define_method(mrb, io_uring_recv_userdata_class, "initialize", mrb_io_uring_recv_userdata_init, MRB_ARGS_REQ(2));
 
   io_uring_send_userdata_class = mrb_define_class_under(mrb, io_uring_class, "SendUserData", mrb->object_class);
   MRB_SET_INSTANCE_TT(io_uring_send_userdata_class, MRB_TT_DATA);
-  mrb_define_method(mrb, io_uring_send_userdata_class, "initialize", mrb_io_uring_send_userdata_init, MRB_ARGS_REQ(1));
+  mrb_define_method(mrb, io_uring_send_userdata_class, "initialize", mrb_io_uring_send_userdata_init, MRB_ARGS_REQ(2));
+
+  io_uring_close_userdata_class = mrb_define_class_under(mrb, io_uring_class, "CloseUserData", mrb->object_class);
+  MRB_SET_INSTANCE_TT(io_uring_close_userdata_class, MRB_TT_DATA);
+  mrb_define_method(mrb, io_uring_close_userdata_class, "initialize", mrb_io_uring_close_userdata_init, MRB_ARGS_REQ(1));
 }
 
 void mrb_mruby_io_uring_gem_final(mrb_state* mrb) {}
