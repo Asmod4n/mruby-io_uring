@@ -51,8 +51,8 @@ mrb_io_uring_prep_socket(mrb_state *mrb, mrb_value self)
   struct io_uring *ring = (struct io_uring *) DATA_PTR(self);
   struct io_uring_sqe *sqe = mrb_io_uring_get_sqe(mrb, ring);
 
-  mrb_int domain = AF_INET, type = SOCK_STREAM, protocol = 0 , flags = 0;
-  mrb_get_args(mrb, "|iiii",&domain, &type, &protocol, &flags);
+  mrb_int domain, type, protocol = 0, flags = 0;
+  mrb_get_args(mrb, "ii|ii", &domain, &type, &protocol, &flags);
 
   mrb_value userdata = mrb_obj_new(mrb, mrb_class_get_under(mrb, mrb_class(mrb, self), "SocketUserData"), 0, NULL);
 
@@ -285,12 +285,23 @@ mrb_io_uring_wait_cqe(mrb_state *mrb, mrb_value self)
   struct io_uring_cqe *cqe;
   int rc = io_uring_wait_cqe(DATA_PTR(self), &cqe);
   if (likely(rc == 0)) {
-    if(unlikely(cqe->res < 0)) {
-      errno = -cqe->res;
-      mrb_sys_fail(mrb, "io_uring_wait_cqe");
-    }
     mrb_value userdata = mrb_obj_value(io_uring_cqe_get_data(cqe));
     mrb_io_uring_userdata_t *userdata_t = DATA_PTR(userdata);
+    if(unlikely(cqe->res < 0)) {
+      switch(userdata_t->type) {
+        case SOCKET:
+          mrb_raise(mrb, E_IO_URING_SOCKET_ERROR, strerror(-cqe->res));
+        case ACCEPT:
+          mrb_raise(mrb, E_IO_URING_ACCEPT_ERROR, strerror(-cqe->res));
+        case RECV:
+          mrb_raise(mrb, E_IO_URING_RECV_ERROR, strerror(-cqe->res));
+        case SEND:
+          mrb_raise(mrb, E_IO_URING_SEND_ERROR, strerror(-cqe->res));
+        case CLOSE:
+          mrb_raise(mrb, E_IO_URING_CLOSE_ERROR, strerror(-cqe->res));
+      }
+    }
+
     mrb_value ret;
 
     switch(userdata_t->type) {
@@ -330,7 +341,7 @@ mrb_mruby_io_uring_gem_init(mrb_state* mrb)
   io_uring_class = mrb_define_class(mrb, "IO_Uring", mrb->object_class);
   MRB_SET_INSTANCE_TT(io_uring_class, MRB_TT_DATA);
   mrb_define_method(mrb, io_uring_class, "initialize",  mrb_io_uring_queue_init,    MRB_ARGS_OPT(2));
-  mrb_define_method(mrb, io_uring_class, "socket",  	  mrb_io_uring_prep_socket,   MRB_ARGS_OPT(4));
+  mrb_define_method(mrb, io_uring_class, "socket",  	  mrb_io_uring_prep_socket,   MRB_ARGS_ARG(2, 2));
   mrb_define_method(mrb, io_uring_class, "accept",  	  mrb_io_uring_prep_accept,   MRB_ARGS_ARG(1, 1));
   mrb_define_method(mrb, io_uring_class, "recv",  	    mrb_io_uring_prep_recv,     MRB_ARGS_ARG(1, 2));
   mrb_define_method(mrb, io_uring_class, "send",  	    mrb_io_uring_prep_send,     MRB_ARGS_ARG(2, 1));
@@ -338,7 +349,12 @@ mrb_mruby_io_uring_gem_init(mrb_state* mrb)
   mrb_define_method(mrb, io_uring_class, "wait",  	    mrb_io_uring_wait_cqe,      MRB_ARGS_NONE());
 
   io_uring_error_class = mrb_define_class_under(mrb, io_uring_class, "Error", E_RUNTIME_ERROR);
-  mrb_define_class_under(mrb, io_uring_class, "SQRingFullError", io_uring_error_class);
+  mrb_define_class_under(mrb, io_uring_class, "SQRingFullError",  io_uring_error_class);
+  mrb_define_class_under(mrb, io_uring_class, "SocketError",      io_uring_error_class);
+  mrb_define_class_under(mrb, io_uring_class, "AcceptError",      io_uring_error_class);
+  mrb_define_class_under(mrb, io_uring_class, "RecvError",        io_uring_error_class);
+  mrb_define_class_under(mrb, io_uring_class, "SendError",        io_uring_error_class);
+  mrb_define_class_under(mrb, io_uring_class, "CloseError",       io_uring_error_class);
 
   io_uring_socket_userdata_class = mrb_define_class_under(mrb, io_uring_class, "SocketUserData", mrb->object_class);
   MRB_SET_INSTANCE_TT(io_uring_socket_userdata_class, MRB_TT_DATA);

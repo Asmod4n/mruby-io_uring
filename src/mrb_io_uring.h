@@ -49,8 +49,3 @@ static const struct mrb_data_type mrb_io_uring_queue_type = {
 static const struct mrb_data_type mrb_io_uring_userdata_type = {
   "$i_mrb_io_uring_userdata_type", mrb_free
 };
-
-static const struct mrb_data_type mrb_io_uring_socket_type = {
-  "$i_mrb_io_uring_socket_type", NULL
-};
-

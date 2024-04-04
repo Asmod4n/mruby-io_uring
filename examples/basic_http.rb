@@ -12,7 +12,6 @@ while true
   uring.wait do |type, userdata|
     case type
     when :socket
-      puts userdata
     when :accept
       uring.accept(server)
       uring.recv(userdata[0])
