@@ -12,14 +12,19 @@ while true
   uring.wait do |type, userdata|
     case type
     when :socket
+      socket, error = userdata
     when :accept
+      socket, addrlist, error = userdata
       uring.accept(server)
-      uring.recv(userdata[0])
+      uring.recv(socket)
     when :recv
-      uring.send(userdata[0], response)
+      socket, buff, error = userdata
+      uring.send(socket, response)
     when :send
-      uring.close(userdata[0])
+      socket, send, error = userdata
+      uring.close(socket)
     when :close
+      socket, error = userdata
     end
   end
 end

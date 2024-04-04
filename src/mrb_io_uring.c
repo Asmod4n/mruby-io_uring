@@ -287,19 +287,27 @@ mrb_io_uring_wait_cqe(mrb_state *mrb, mrb_value self)
   if (likely(rc == 0)) {
     mrb_value userdata = mrb_obj_value(io_uring_cqe_get_data(cqe));
     mrb_io_uring_userdata_t *userdata_t = DATA_PTR(userdata);
+    mrb_value error = mrb_nil_value();
     if(unlikely(cqe->res < 0)) {
+      const char *ptr = strerror(-cqe->res);
       switch(userdata_t->type) {
         case SOCKET:
-          mrb_raise(mrb, E_IO_URING_SOCKET_ERROR, strerror(-cqe->res));
+          error = mrb_exc_new(mrb, E_IO_URING_SOCKET_ERROR, ptr, strlen(ptr));
+          break;
         case ACCEPT:
-          mrb_raise(mrb, E_IO_URING_ACCEPT_ERROR, strerror(-cqe->res));
+          error = mrb_exc_new(mrb, E_IO_URING_ACCEPT_ERROR, ptr, strlen(ptr));
+          break;
         case RECV:
-          mrb_raise(mrb, E_IO_URING_RECV_ERROR, strerror(-cqe->res));
+          error = mrb_exc_new(mrb, E_IO_URING_RECV_ERROR, ptr, strlen(ptr));
+          break;
         case SEND:
-          mrb_raise(mrb, E_IO_URING_SEND_ERROR, strerror(-cqe->res));
+          error = mrb_exc_new(mrb, E_IO_URING_SEND_ERROR, ptr, strlen(ptr));
+          break;
         case CLOSE:
-          mrb_raise(mrb, E_IO_URING_CLOSE_ERROR, strerror(-cqe->res));
+          error = mrb_exc_new(mrb, E_IO_URING_CLOSE_ERROR, ptr, strlen(ptr));
+          break;
       }
+      mrb_iv_set(mrb, error, mrb_intern_lit(mrb, "@sock"), mrb_iv_get(mrb, userdata, mrb_intern_lit(mrb, "sock")));
     }
 
     mrb_value ret;
@@ -317,9 +325,19 @@ mrb_io_uring_wait_cqe(mrb_state *mrb, mrb_value self)
         ret = mrb_assoc_new(mrb, mrb_iv_get(mrb, userdata, mrb_intern_lit(mrb, "sock")), buf);        
       } break;
       case SEND:
-      case CLOSE:
         ret = mrb_assoc_new(mrb, mrb_iv_get(mrb, userdata, mrb_intern_lit(mrb, "sock")), mrb_int_value(mrb, cqe->res));
+        break;
+      case CLOSE:
+        ret = mrb_iv_get(mrb, userdata, mrb_intern_lit(mrb, "sock"));
       break;
+    }
+
+    if(unlikely(mrb_exception_p(error))) {
+      if (mrb_array_p(ret)) {
+        mrb_ary_push(mrb, ret, error);
+      } else {
+        ret = mrb_assoc_new(mrb, ret, error);
+      }
     }
 
     mrb_value argv[] = {userdata_t->type_sym, ret};
