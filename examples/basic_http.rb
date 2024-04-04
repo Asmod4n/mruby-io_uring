@@ -9,22 +9,18 @@ uring = IO_Uring.new
 uring.accept(server)
 
 while true
-  uring.wait do |type, userdata|
+  uring.wait do |type, socket, ret, error|
+    raise error if error
     case type
     when :socket
-      socket, error = userdata
     when :accept
-      socket, addrlist, error = userdata
-      uring.accept(server)
       uring.recv(socket)
+      uring.accept(server)
     when :recv
-      socket, buff, error = userdata
       uring.send(socket, response)
     when :send
-      socket, send, error = userdata
       uring.close(socket)
     when :close
-      socket, error = userdata
     end
   end
 end

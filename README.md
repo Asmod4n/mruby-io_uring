@@ -1,6 +1,6 @@
 # mruby-io_uring
 
-io_uring for mruby
+io_uring for mruby (WIP)
 
 Requirements
 ============
@@ -34,55 +34,26 @@ uring = IO_Uring.new # this sets up one io_uring
 uring.accept(server) # this sends a command to create a accept socket
 
 while true
-  uring.wait do |type, userdata|
+  uring.wait do |type, socket, ret, error| # this function tells you when a command has finished and gives you back its reply.
+    raise error if error
     case type
     when :socket
-      socket, error = userdata
     when :accept
-      socket, addrlist, error = userdata
-      uring.accept(server)
+      addrinfo = ret
       uring.recv(socket)
-    when :recv
-      socket, buff, error = userdata
-      uring.send(socket, response)
-    when :send
-      socket, send, error = userdata
-      uring.close(socket)
-    when :close
-      socket, error = userdata
-    end
-  end
-end
-
-while true
-  uring.wait do |type, userdata| # this function tells you when a command has finished and gives you back its reply.
-    case type
-    when :socket
-      socket, error = userdata
-    when :accept
-      socket, addrlist, error = userdata
       uring.accept(server)
-      uring.recv(socket) 
     when :recv
-      socket, buff, error = userdata
+      buf = ret
       uring.send(socket, response)
     when :send
-      socket, send, error = userdata
+      send_bytes = ret
       uring.close(socket)
     when :close
-      socket, error = userdata
     end
   end
 end
 
 ```
-
-Error Handling
-==============
-
-System type errors, aka, when a io_uring fuction directly returns an arror are raised according to the errno specification.
-uring.wait handles errors a little bit like go, the last field of the userdata array can be an error, or doesnt exist.
-The error handling is up to the library user for maximal flexibility and speed, when error is set it is an exception object with a special field named .sock so you know which socket caused an error.
 
 Benchmark
 =========
@@ -133,4 +104,4 @@ Details (average, fastest, slowest):
 
 Status code distribution:
   [200] 171991 responses
-```pre
+```

@@ -169,7 +169,8 @@ mrb_io_uring_accept_userdata_init(mrb_state *mrb, mrb_value self)
   mrb_data_init(self, userdata, &mrb_io_uring_userdata_type);
   userdata->type = ACCEPT;
   userdata->type_sym = mrb_symbol_value(mrb_intern_lit(mrb, "accept"));
-  userdata->salen = sizeof(struct sockaddr_storage);
+  memset(&userdata->sa, '\0', sizeof(userdata->sa));
+  userdata->salen = sizeof(userdata->sa);
 
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "sock"), sock);
 
@@ -287,63 +288,60 @@ mrb_io_uring_wait_cqe(mrb_state *mrb, mrb_value self)
   if (likely(rc == 0)) {
     mrb_value userdata = mrb_obj_value(io_uring_cqe_get_data(cqe));
     mrb_io_uring_userdata_t *userdata_t = DATA_PTR(userdata);
+    mrb_value sock = mrb_nil_value();
+    mrb_value ret = mrb_nil_value();
     mrb_value error = mrb_nil_value();
-    if(unlikely(cqe->res < 0)) {
+
+    if(likely(cqe->res >= 0)) {
+      switch(userdata_t->type) {
+        case SOCKET: {
+          sock = mrb_int_value(mrb, cqe->res);
+        } break;
+        case ACCEPT: {
+          sock = mrb_int_value(mrb, cqe->res);
+          ret = sa2addrlist(mrb, (struct sockaddr*)&userdata_t->sa, userdata_t->salen);
+        } break;
+        case RECV: {
+          sock = mrb_iv_get(mrb, userdata, mrb_intern_lit(mrb, "sock"));
+          ret = mrb_iv_get(mrb, userdata, mrb_intern_lit(mrb, "buf"));
+          mrb_str_resize(mrb, ret, cqe->res);
+        } break;
+        case SEND:
+        case CLOSE:
+          sock = mrb_iv_get(mrb, userdata, mrb_intern_lit(mrb, "sock"));
+          ret = mrb_int_value(mrb, cqe->res);
+          break;
+        break;
+      }   
+    } else {
       const char *ptr = strerror(-cqe->res);
       switch(userdata_t->type) {
         case SOCKET:
           error = mrb_exc_new(mrb, E_IO_URING_SOCKET_ERROR, ptr, strlen(ptr));
           break;
         case ACCEPT:
+          sock = mrb_iv_get(mrb, userdata, mrb_intern_lit(mrb, "sock"));
           error = mrb_exc_new(mrb, E_IO_URING_ACCEPT_ERROR, ptr, strlen(ptr));
           break;
         case RECV:
+          sock = mrb_iv_get(mrb, userdata, mrb_intern_lit(mrb, "sock"));
           error = mrb_exc_new(mrb, E_IO_URING_RECV_ERROR, ptr, strlen(ptr));
           break;
         case SEND:
-          error = mrb_exc_new(mrb, E_IO_URING_SEND_ERROR, ptr, strlen(ptr));
+          sock = mrb_iv_get(mrb, userdata, mrb_intern_lit(mrb, "sock"));
+          error = mrb_exc_new(mrb, E_IO_URING_SEND_ERROR, ptr, strlen(ptr));          
           break;
         case CLOSE:
+          sock = mrb_iv_get(mrb, userdata, mrb_intern_lit(mrb, "sock"));
           error = mrb_exc_new(mrb, E_IO_URING_CLOSE_ERROR, ptr, strlen(ptr));
           break;
-      }
-      mrb_iv_set(mrb, error, mrb_intern_lit(mrb, "@sock"), mrb_iv_get(mrb, userdata, mrb_intern_lit(mrb, "sock")));
+      }    
     }
 
-    mrb_value ret;
-
-    switch(userdata_t->type) {
-      case SOCKET: {
-        ret = mrb_int_value(mrb, cqe->res);
-      } break;
-      case ACCEPT: {
-        ret = mrb_assoc_new(mrb, mrb_int_value(mrb, cqe->res), sa2addrlist(mrb, (struct sockaddr*)&userdata_t->sa, userdata_t->salen));
-      } break;
-      case RECV: {
-        mrb_value buf = mrb_iv_get(mrb, userdata, mrb_intern_lit(mrb, "buf"));
-        mrb_str_resize(mrb, buf, cqe->res);
-        ret = mrb_assoc_new(mrb, mrb_iv_get(mrb, userdata, mrb_intern_lit(mrb, "sock")), buf);        
-      } break;
-      case SEND:
-        ret = mrb_assoc_new(mrb, mrb_iv_get(mrb, userdata, mrb_intern_lit(mrb, "sock")), mrb_int_value(mrb, cqe->res));
-        break;
-      case CLOSE:
-        ret = mrb_iv_get(mrb, userdata, mrb_intern_lit(mrb, "sock"));
-      break;
-    }
-
-    if(unlikely(mrb_exception_p(error))) {
-      if (mrb_array_p(ret)) {
-        mrb_ary_push(mrb, ret, error);
-      } else {
-        ret = mrb_assoc_new(mrb, ret, error);
-      }
-    }
-
-    mrb_value argv[] = {userdata_t->type_sym, ret};
+    mrb_value argv[] = {userdata_t->type_sym, sock, ret, error};
     mrb_yield_argv(mrb, block, sizeof(argv) / sizeof(argv[0]), argv);
-    mrb_hash_delete_key(mrb, mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "sqes")), userdata);
     io_uring_cqe_seen(DATA_PTR(self), cqe);
+    mrb_hash_delete_key(mrb, mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "sqes")), userdata);
   } else {
     errno = -rc;
     mrb_sys_fail(mrb, "io_uring_wait_cqe");
@@ -364,7 +362,7 @@ mrb_mruby_io_uring_gem_init(mrb_state* mrb)
   mrb_define_method(mrb, io_uring_class, "recv",  	    mrb_io_uring_prep_recv,     MRB_ARGS_ARG(1, 2));
   mrb_define_method(mrb, io_uring_class, "send",  	    mrb_io_uring_prep_send,     MRB_ARGS_ARG(2, 1));
   mrb_define_method(mrb, io_uring_class, "close",  	    mrb_io_uring_prep_close,    MRB_ARGS_REQ(1));
-  mrb_define_method(mrb, io_uring_class, "wait",  	    mrb_io_uring_wait_cqe,      MRB_ARGS_NONE());
+  mrb_define_method(mrb, io_uring_class, "wait",  	    mrb_io_uring_wait_cqe,      MRB_ARGS_BLOCK());
 
   io_uring_error_class = mrb_define_class_under(mrb, io_uring_class, "Error", E_RUNTIME_ERROR);
   mrb_define_class_under(mrb, io_uring_class, "SQRingFullError",  io_uring_error_class);
