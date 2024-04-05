@@ -433,7 +433,7 @@ mrb_io_uring_wait_cqe(mrb_state *mrb, mrb_value self)
   }
 
   mrb_value userdata = mrb_obj_value(io_uring_cqe_get_data(cqe));
-  mrb_iv_set(mrb, userdata, mrb_intern_lit(mrb, "@ret"), mrb_fixnum_value(cqe->res));
+  mrb_iv_set(mrb, userdata, mrb_intern_lit(mrb, "@res"), mrb_fixnum_value(cqe->res));
   mrb_io_uring_userdata_t *userdata_t = DATA_PTR(userdata);
 
   if(likely(cqe->res >= 0)) {
