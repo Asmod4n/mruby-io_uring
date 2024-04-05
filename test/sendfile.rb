@@ -30,7 +30,7 @@ class IO::Uring
   end
 
   def close_sendfile
-    close @socket
+    close @sendfile_socket
     @file.close
     @pipe_out.close
     @pipe_in.close

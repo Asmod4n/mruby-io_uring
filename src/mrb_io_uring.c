@@ -11,7 +11,7 @@ mrb_io_uring_queue_init(mrb_state *mrb, mrb_value self)
 
   int ret = io_uring_queue_init(entries, ring, flags);
   if (likely(ret == 0)) {
-    mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "sqes"), mrb_hash_new(mrb));
+    mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "sqes"), mrb_hash_new_capa(mrb, entries));
     return self;
   } else {
     errno = -ret;
@@ -388,17 +388,16 @@ mrb_io_uring_close_userdata_init(mrb_state *mrb, mrb_value self)
 static mrb_value
 sa2addrlist(mrb_state *mrb, const struct sockaddr *sa, socklen_t salen)
 {
-  mrb_value ary, host;
-  unsigned short port;
-  mrb_value afstr;
+  mrb_sym afstr;
+  in_port_t port;
 
   switch (sa->sa_family) {
   case AF_INET:
-    afstr = mrb_str_new_lit_frozen(mrb, "AF_INET");
+    afstr = mrb_intern_lit(mrb, "AF_INET");
     port = ((struct sockaddr_in*)sa)->sin_port;
     break;
   case AF_INET6:
-    afstr = mrb_str_new_lit_frozen(mrb, "AF_INET6");
+    afstr = mrb_intern_lit(mrb, "AF_INET6");
     port = ((struct sockaddr_in6*)sa)->sin6_port;
     break;
   default:
@@ -406,12 +405,12 @@ sa2addrlist(mrb_state *mrb, const struct sockaddr *sa, socklen_t salen)
     return mrb_nil_value();
   }
   port = ntohs(port);
-  host = mrb_str_new_capa(mrb, NI_MAXHOST);
+  mrb_value host = mrb_str_new_capa(mrb, NI_MAXHOST);
   if (unlikely(getnameinfo((struct sockaddr*)sa, salen, RSTRING_PTR(host), NI_MAXHOST, NULL, 0, NI_NUMERICHOST) == -1))
     mrb_sys_fail(mrb, "getnameinfo");
   mrb_str_resize(mrb, host, strlen(RSTRING_PTR(host)));
-  ary = mrb_ary_new_capa(mrb, 3);
-  mrb_ary_push(mrb, ary, afstr);
+  mrb_value ary = mrb_ary_new_capa(mrb, 3);
+  mrb_ary_push(mrb, ary, mrb_symbol_value(afstr));
   mrb_ary_push(mrb, ary, mrb_fixnum_value(port));
   mrb_ary_push(mrb, ary, host);
   return ary;
@@ -428,65 +427,62 @@ mrb_io_uring_wait_cqe(mrb_state *mrb, mrb_value self)
   
   struct io_uring_cqe *cqe = NULL;
   rc = io_uring_wait_cqe(DATA_PTR(self), &cqe);
-  if (likely(rc == 0)) {
-    mrb_value userdata = mrb_obj_value(io_uring_cqe_get_data(cqe));
-    mrb_iv_set(mrb, userdata, mrb_intern_lit(mrb, "@ret"), mrb_fixnum_value(cqe->res));
-    mrb_io_uring_userdata_t *userdata_t = DATA_PTR(userdata);
-
-    if(likely(cqe->res >= 0)) {
-      switch(userdata_t->type) {
-        case SOCKET:
-          mrb_iv_set(mrb, userdata, mrb_intern_lit(mrb, "@sock"), mrb_fixnum_value(cqe->res));
-        break;
-        case ACCEPT:
-          mrb_iv_set(mrb, userdata, mrb_intern_lit(mrb, "@sock"), mrb_fixnum_value(cqe->res));
-          mrb_iv_set(mrb, userdata, mrb_intern_lit(mrb, "@addrlist"), sa2addrlist(mrb, (struct sockaddr*)&userdata_t->sa, userdata_t->salen));
-        break;
-        case RECV:
-          mrb_str_resize(mrb, mrb_iv_get(mrb, userdata, mrb_intern_lit(mrb, "@buf")), cqe->res);
-        break;
-          default:
-        break;
-      }   
-    } else {
-      switch (userdata_t->type) {
-        case SOCKET:
-          mrb_iv_set(mrb, userdata, mrb_intern_lit(mrb, "@type"), mrb_symbol_value(mrb_intern_lit(mrb, "socket_error")));
-        break;
-        case ACCEPT:
-          mrb_iv_set(mrb, userdata, mrb_intern_lit(mrb, "@type"), mrb_symbol_value(mrb_intern_lit(mrb, "accept_error")));
-        break;
-        case RECV:
-          mrb_iv_set(mrb, userdata, mrb_intern_lit(mrb, "@type"), mrb_symbol_value(mrb_intern_lit(mrb, "recv_error")));
-        break;
-        case SPLICE:
-          mrb_iv_set(mrb, userdata, mrb_intern_lit(mrb, "@type"), mrb_symbol_value(mrb_intern_lit(mrb, "splice_error")));
-        break;
-        case SEND:
-          mrb_iv_set(mrb, userdata, mrb_intern_lit(mrb, "@type"), mrb_symbol_value(mrb_intern_lit(mrb, "send_error")));
-        break;
-        case SHUTDOWN:
-          mrb_iv_set(mrb, userdata, mrb_intern_lit(mrb, "@type"), mrb_symbol_value(mrb_intern_lit(mrb, "shutdown_error")));
-        break;
-        case CLOSE:
-          mrb_iv_set(mrb, userdata, mrb_intern_lit(mrb, "@type"), mrb_symbol_value(mrb_intern_lit(mrb, "close_error")));
-        break;
-      }
-      mrb_value errno_val = mrb_fixnum_value(-cqe->res);
-      mrb_iv_set(mrb, userdata, mrb_intern_lit(mrb, "@errno"), mrb_obj_new(mrb, mrb_class_get(mrb, "SystemCallError"), 1, &errno_val));
-    }
-
-    io_uring_cqe_seen(DATA_PTR(self), cqe);
-    mrb_hash_delete_key(mrb, mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "sqes")), userdata);
-
-    return userdata;
-
-  } else {
+  if (unlikely(rc < 0)) {
     errno = -rc;
     mrb_sys_fail(mrb, "io_uring_wait_cqe");
   }
 
-  return self;
+  mrb_value userdata = mrb_obj_value(io_uring_cqe_get_data(cqe));
+  mrb_iv_set(mrb, userdata, mrb_intern_lit(mrb, "@ret"), mrb_fixnum_value(cqe->res));
+  mrb_io_uring_userdata_t *userdata_t = DATA_PTR(userdata);
+
+  if(likely(cqe->res >= 0)) {
+    switch(userdata_t->type) {
+      case SOCKET:
+        mrb_iv_set(mrb, userdata, mrb_intern_lit(mrb, "@sock"), mrb_fixnum_value(cqe->res));
+      break;
+      case ACCEPT:
+        mrb_iv_set(mrb, userdata, mrb_intern_lit(mrb, "@sock"), mrb_fixnum_value(cqe->res));
+        mrb_iv_set(mrb, userdata, mrb_intern_lit(mrb, "@addrlist"), sa2addrlist(mrb, (struct sockaddr*)&userdata_t->sa, userdata_t->salen));
+      break;
+      case RECV:
+        mrb_str_resize(mrb, mrb_iv_get(mrb, userdata, mrb_intern_lit(mrb, "@buf")), cqe->res);
+      break;
+        default:
+      break;
+    }   
+  } else {
+    switch (userdata_t->type) {
+      case SOCKET:
+        mrb_iv_set(mrb, userdata, mrb_intern_lit(mrb, "@type"), mrb_symbol_value(mrb_intern_lit(mrb, "socket_error")));
+      break;
+      case ACCEPT:
+        mrb_iv_set(mrb, userdata, mrb_intern_lit(mrb, "@type"), mrb_symbol_value(mrb_intern_lit(mrb, "accept_error")));
+      break;
+      case RECV:
+        mrb_iv_set(mrb, userdata, mrb_intern_lit(mrb, "@type"), mrb_symbol_value(mrb_intern_lit(mrb, "recv_error")));
+      break;
+      case SPLICE:
+        mrb_iv_set(mrb, userdata, mrb_intern_lit(mrb, "@type"), mrb_symbol_value(mrb_intern_lit(mrb, "splice_error")));
+      break;
+      case SEND:
+        mrb_iv_set(mrb, userdata, mrb_intern_lit(mrb, "@type"), mrb_symbol_value(mrb_intern_lit(mrb, "send_error")));
+      break;
+      case SHUTDOWN:
+        mrb_iv_set(mrb, userdata, mrb_intern_lit(mrb, "@type"), mrb_symbol_value(mrb_intern_lit(mrb, "shutdown_error")));
+      break;
+      case CLOSE:
+        mrb_iv_set(mrb, userdata, mrb_intern_lit(mrb, "@type"), mrb_symbol_value(mrb_intern_lit(mrb, "close_error")));
+      break;
+    }
+    mrb_value errno_val = mrb_fixnum_value(-cqe->res);
+    mrb_iv_set(mrb, userdata, mrb_intern_lit(mrb, "@errno"), mrb_obj_new(mrb, mrb_class_get(mrb, "SystemCallError"), 1, &errno_val));
+  }
+
+  io_uring_cqe_seen(DATA_PTR(self), cqe);
+  mrb_hash_delete_key(mrb, mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "sqes")), userdata);
+
+  return userdata;
 }
 
 static mrb_value

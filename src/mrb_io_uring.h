@@ -1,21 +1,8 @@
 #define _GNU_SOURCE
-#include <errno.h>
-#include <stdio.h>
-#include <assert.h>
-#include <unistd.h>
-#include <stdlib.h>
-#include <string.h>
-#include <arpa/inet.h>
-#include <linux/tcp.h>
-#include <sys/mman.h>
-#include <sys/socket.h>
-#include <sys/types.h>
-#include <sys/epoll.h>
 #include <netinet/in.h>
 #include <netdb.h>
+#include <string.h>
 #include <liburing.h>
-
-
 #include <mruby.h>
 #include <mruby/data.h>
 #include <mruby/variable.h>
