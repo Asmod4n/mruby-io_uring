@@ -3,7 +3,7 @@ MRuby::Build.new do |conf|
     enable_debug
     conf.enable_sanitizer "address,undefined,leak"
     conf.cc.flags << '-fno-omit-frame-pointer' << '-g' << '-ggdb' << '-Og'
-    #conf.cc.flags << '-O3'
+    #conf.cc.flags << '-O3 -march=native'
     conf.enable_debug
     conf.enable_bintest
     conf.enable_test

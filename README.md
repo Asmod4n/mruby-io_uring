@@ -33,18 +33,22 @@ server.listen(4096)
 uring = IO::Uring.new
 uring.accept(server)
 
+body = "hallo\n"
+headers = "HTTP/1.1 200 OK\r\nConnection: keep-alive\r\nContent-Type: text/plain\r\nContent-Length: #{body.bytesize}\r\n\r\n"
+response = headers + body
+
 while true
   userdata = uring.wait
   case userdata.type
   when :accept
     uring.recv(userdata.sock).accept(server)
   when :recv
-    body = "hallo\n"
-    uring.send(userdata.sock, "HTTP/1.1 200 OK\r\nConnection: keep-alive\r\nContent-Type: text/plain\r\nContent-Length: #{body.bytesize}\r\n\r\n#{body}")
+    uring.send(userdata.sock, response)
   when :send
     uring.close(userdata.sock)
   end
 end
+
 ```
 
 Benchmark
@@ -52,48 +56,48 @@ Benchmark
 
 Tested on Windows 11 inside a wsl 2 VM. Ryzen 7 5800x, 32gb DDR 3200 Ram.
 ```pre
- hey -z 3s -cpus 3 http://127.0.0.1:12345
+hey -z 3s -cpus 3 http://127.0.0.1:12345
 
 Summary:
-  Total:        3.0008 secs
-  Slowest:      0.0062 secs
+  Total:        3.0012 secs
+  Slowest:      0.0052 secs
   Fastest:      0.0000 secs
-  Average:      0.0009 secs
-  Requests/sec: 57126.3036
+  Average:      0.0008 secs
+  Requests/sec: 59363.8046
 
-  Total data:   1028556 bytes
+  Total data:   1068978 bytes
   Size/request: 6 bytes
 
 Response time histogram:
   0.000 [1]     |
-  0.001 [37589] |■■■■■■■■■■■■■
-  0.001 [116067]        |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
-  0.002 [15372] |■■■■■
-  0.003 [1884]  |■
-  0.003 [445]   |
-  0.004 [43]    |
-  0.004 [14]    |
-  0.005 [9]     |
-  0.006 [1]     |
-  0.006 [1]     |
+  0.001 [29029] |■■■■■■■■■■
+  0.001 [114737]        |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
+  0.002 [28962] |■■■■■■■■■■
+  0.002 [4150]  |■
+  0.003 [924]   |
+  0.003 [251]   |
+  0.004 [82]    |
+  0.004 [18]    |
+  0.005 [5]     |
+  0.005 [4]     |
 
 
 Latency distribution:
   10% in 0.0005 secs
-  25% in 0.0007 secs
+  25% in 0.0006 secs
   50% in 0.0008 secs
   75% in 0.0010 secs
-  90% in 0.0013 secs
-  95% in 0.0015 secs
+  90% in 0.0012 secs
+  95% in 0.0014 secs
   99% in 0.0020 secs
 
 Details (average, fastest, slowest):
-  DNS+dialup:   0.0000 secs, 0.0000 secs, 0.0062 secs
+  DNS+dialup:   0.0000 secs, 0.0000 secs, 0.0052 secs
   DNS-lookup:   0.0000 secs, 0.0000 secs, 0.0000 secs
   req write:    0.0001 secs, 0.0000 secs, 0.0021 secs
-  resp wait:    0.0006 secs, 0.0000 secs, 0.0027 secs
-  resp read:    0.0001 secs, 0.0000 secs, 0.0020 secs
+  resp wait:    0.0005 secs, 0.0000 secs, 0.0021 secs
+  resp read:    0.0001 secs, 0.0000 secs, 0.0021 secs
 
 Status code distribution:
-  [200] 171426 responses
+  [200] 178163 responses
 ```

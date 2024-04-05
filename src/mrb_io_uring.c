@@ -535,8 +535,8 @@ mrb_mruby_io_uring_gem_init(mrb_state* mrb)
 
   io_uring_sqe_class = mrb_define_class_under(mrb, io_uring_class, "Sqe", mrb->object_class);
   MRB_SET_INSTANCE_TT(io_uring_class, MRB_TT_CDATA);
-  mrb_define_method(mrb, io_uring_sqe_class, "flags", mrb_uring_sqe_flags_get, MRB_ARGS_NONE());
-  mrb_define_method(mrb, io_uring_sqe_class, "flags=", mrb_uring_sqe_flags_set, MRB_ARGS_NONE());
+  mrb_define_method(mrb, io_uring_sqe_class, "flags",   mrb_uring_sqe_flags_get, MRB_ARGS_NONE());
+  mrb_define_method(mrb, io_uring_sqe_class, "flags=",  mrb_uring_sqe_flags_set, MRB_ARGS_NONE());
   mrb_define_method(mrb, io_uring_sqe_class, "io_link", mrb_uring_sqe_io_link, MRB_ARGS_NONE());
   mrb_define_const (mrb, io_uring_sqe_class, "IO_LINK", mrb_fixnum_value(IOSQE_IO_LINK));
 
@@ -556,7 +556,7 @@ mrb_mruby_io_uring_gem_init(mrb_state* mrb)
 
   io_uring_recv_userdata_class = mrb_define_class_under(mrb, io_uring_class, "RecvUserData", io_uring_userdata_class);
   MRB_SET_INSTANCE_TT(io_uring_recv_userdata_class, MRB_TT_CDATA);
-  mrb_define_method(mrb, io_uring_recv_userdata_class, "initialize", mrb_io_uring_recv_userdata_init, MRB_ARGS_REQ(2));
+  mrb_define_method(mrb, io_uring_recv_userdata_class, "initialize", mrb_io_uring_recv_userdata_init, MRB_ARGS_REQ(3));
 
   io_uring_splice_userdata_class = mrb_define_class_under(mrb, io_uring_class, "SpliceUserData", io_uring_userdata_class);
   MRB_SET_INSTANCE_TT(io_uring_splice_userdata_class, MRB_TT_CDATA);
@@ -564,7 +564,7 @@ mrb_mruby_io_uring_gem_init(mrb_state* mrb)
 
   io_uring_send_userdata_class = mrb_define_class_under(mrb, io_uring_class, "SendUserData", io_uring_userdata_class);
   MRB_SET_INSTANCE_TT(io_uring_send_userdata_class, MRB_TT_CDATA);
-  mrb_define_method(mrb, io_uring_send_userdata_class, "initialize", mrb_io_uring_send_userdata_init, MRB_ARGS_REQ(2));
+  mrb_define_method(mrb, io_uring_send_userdata_class, "initialize", mrb_io_uring_send_userdata_init, MRB_ARGS_REQ(3));
 
   io_uring_shutdown_userdata_class = mrb_define_class_under(mrb, io_uring_class, "ShutdownUserData", io_uring_userdata_class);
   MRB_SET_INSTANCE_TT(io_uring_shutdown_userdata_class, MRB_TT_CDATA);
@@ -572,7 +572,7 @@ mrb_mruby_io_uring_gem_init(mrb_state* mrb)
 
   io_uring_close_userdata_class = mrb_define_class_under(mrb, io_uring_class, "CloseUserData", io_uring_userdata_class);
   MRB_SET_INSTANCE_TT(io_uring_close_userdata_class, MRB_TT_CDATA);
-  mrb_define_method(mrb, io_uring_close_userdata_class, "initialize", mrb_io_uring_close_userdata_init, MRB_ARGS_REQ(1));
+  mrb_define_method(mrb, io_uring_close_userdata_class, "initialize", mrb_io_uring_close_userdata_init, MRB_ARGS_REQ(2));
 }
 
 void mrb_mruby_io_uring_gem_final(mrb_state* mrb) {}

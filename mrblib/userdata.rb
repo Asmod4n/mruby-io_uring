@@ -1,3 +1,3 @@
 class IO::Uring::UserData
-  attr_reader :type, :sock, :ret, :addrlist, :buf, :errno
+  attr_reader :type, :sock, :buf, :ret, :addrlist, :errno
 end
