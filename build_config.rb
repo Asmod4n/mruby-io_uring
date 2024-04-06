@@ -5,8 +5,9 @@ MRuby::Build.new do |conf|
     conf.cc.flags << '-fno-omit-frame-pointer' << '-g' << '-ggdb' << '-Og'
     #conf.cc.flags << '-O3 -march=native'
     conf.enable_debug
-    conf.enable_bintest
     conf.enable_test
+    conf.enable_bintest
     conf.gembox 'full-core'
     conf.gem File.expand_path(File.dirname(__FILE__))
+    conf.gem mgem: 'mruby-phr'
   end

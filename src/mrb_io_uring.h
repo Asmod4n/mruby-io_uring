@@ -1,4 +1,5 @@
 #define _GNU_SOURCE
+#define NSEC_PER_SEC 1000000000
 #include <netinet/in.h>
 #include <netdb.h>
 #include <string.h>
@@ -12,6 +13,8 @@
 #include <mruby/string.h>
 #include <mruby/array.h>
 #include <mruby/io_uring.h>
+#include <sys/time.h>
+
 
 #define likely(x) __builtin_expect(!!(x), 1)
 #define unlikely(x) __builtin_expect(!!(x), 0)
@@ -25,7 +28,8 @@ enum userdata_types {
   SPLICE,
   SEND,
   SHUTDOWN,
-  CLOSE
+  CLOSE,
+  POLLADD
 };
 
 typedef struct {
