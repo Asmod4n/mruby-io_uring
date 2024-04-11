@@ -58,3 +58,4 @@ build-iPhoneSimulator/
 #mruby
 /mruby/
 build_config.rb.lock
+.aider*

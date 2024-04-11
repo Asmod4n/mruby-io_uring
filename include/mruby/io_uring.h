@@ -2,6 +2,9 @@
 #define MRUBY_IO_URING_H
 
 #include <mruby.h>
+#ifdef MRB_INT16
+#error "mruby-io_uring: MRB_INT16 is too small for mruby-io_uring"
+#endif
 
 MRB_BEGIN_DECL
 

@@ -35,7 +35,7 @@ uring = IO::Uring.new
 server = TCPServer.new(12345)
 server._setnonblock(true)
 server.listen(4096)
-uring.accept(server)
+uring.prep_accept(server)
 
 phr = Phr.new
 
@@ -44,28 +44,28 @@ while true
     raise userdata.errno if userdata.errno
     case userdata.type
     when :accept
-      puts "Addrlist    : #{userdata.addrlist.inspect}"
-      puts "Socket      : #{userdata.res}"
-      uring.recv(userdata.res).accept(server)
+      puts "Remote Address: #{userdata.to_tcpsocket.remote_address.inspect}"
+      puts "Socket        : #{userdata.res}"
+      uring.prep_recv(userdata.res).prep_accept(userdata.sock)
     when :recv
       next if userdata.res == 0
       ret = phr.parse_request(userdata.buf)
       case ret
       when :incomplete, :parser_error
-        uring.close(userdatta.sock)
+        uring.prep_close(userdata.sock)
         phr.reset
         next
       when Integer
-        puts "HTTP Method : #{phr.method}"
-        puts "HTTP Version: 1.#{phr.minor_version}"
-        puts "HTTP Path   : #{phr.path}"
-        puts "HTTP Headers: #{phr.headers.inspect}"
-        puts "HTTP Body   : #{userdata.buf.byteslice(ret..-1).inspect}"
+        puts "HTTP Method   : #{phr.method}"
+        puts "HTTP Version  : 1.#{phr.minor_version}"
+        puts "HTTP Path     : #{phr.path}"
+        puts "HTTP Headers  : #{phr.headers.inspect}"
+        puts "HTTP Body     : #{userdata.buf.byteslice(ret..-1).inspect}"
       end
       phr.reset
-      uring.send(userdata.sock, response)
+      uring.prep_send(userdata.sock, response)
     when :send
-      uring.close(userdata.sock)
+      uring.prep_close(userdata.sock)
     end
   end
 end

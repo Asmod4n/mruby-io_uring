@@ -44,7 +44,7 @@ mrb_io_uring_submit(mrb_state *mrb, mrb_value self)
     mrb_sys_fail(mrb, "io_uring_submit");
   }
 
-  return self;
+  return mrb_int_value(mrb, ret);
 }
 
 static mrb_value
@@ -79,11 +79,10 @@ mrb_io_uring_prep_accept(mrb_state *mrb, mrb_value self)
   mrb_value argv[] = { self, sock };
   mrb_value userdata = mrb_obj_new(mrb, mrb_class_get_under(mrb, mrb_class(mrb, self), "_AcceptUserData"), NELEMS(argv), argv);
   io_uring_sqe_set_data(sqe, mrb_ptr(userdata));
-  mrb_io_uring_userdata_t *userdata_t = DATA_PTR(userdata);
 
   io_uring_prep_accept(sqe,
   mrb_fixnum(mrb_convert_type(mrb, sock, MRB_TT_INTEGER, "Integer", "fileno")),
-  (struct sockaddr*)&userdata_t->sa, &userdata_t->salen,
+  NULL, NULL,
   (int) flags);
 
   mrb_hash_set(mrb, mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "sqes")), userdata, sock);
@@ -138,7 +137,6 @@ mrb_io_uring_prep_splice(mrb_state *mrb, mrb_value self)
   nbytes, splice_flags);
 
   mrb_hash_set(mrb, mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "sqes")), userdata, mrb_assoc_new(mrb, fd_in, fd_out));
-
 
   return self;
 }
@@ -234,12 +232,20 @@ mrb_io_uring_socket_userdata_init(mrb_state *mrb, mrb_value self)
   mrb_get_args(mrb, "o", &ring_val);
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "ring"), ring_val);
 
-  mrb_io_uring_userdata_t *userdata = mrb_realloc(mrb, DATA_PTR(self), sizeof(*userdata));
+  enum mrb_io_uring_userdata_types *userdata = mrb_realloc(mrb, DATA_PTR(self), sizeof(*userdata));
   mrb_data_init(self, userdata, &mrb_io_uring_userdata_type);
-  userdata->type = SOCKET;
+  *userdata = SOCKET;
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@type"), mrb_symbol_value(mrb_intern_lit(mrb, "socket")));
 
   return self;
+}
+
+static mrb_value
+mrb_io_uring_socket_userdata_to_tcpserver(mrb_state *mrb, mrb_value self)
+{
+  mrb_value tcp_server = mrb_funcall(mrb, mrb_obj_value(mrb_class_get(mrb, "TCPServer")), "for_fd", 1, mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "@res")));
+  ((struct mrb_io *)DATA_PTR(tcp_server))->close_fd = 0;
+  return tcp_server;
 }
 
 static mrb_value
@@ -249,14 +255,21 @@ mrb_io_uring_accept_userdata_init(mrb_state *mrb, mrb_value self)
   mrb_get_args(mrb, "oo", &ring_val, &sock);
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "ring"), ring_val);
 
-  mrb_io_uring_userdata_t *userdata = mrb_realloc(mrb, DATA_PTR(self), sizeof(*userdata));
+  enum mrb_io_uring_userdata_types *userdata = mrb_realloc(mrb, DATA_PTR(self), sizeof(*userdata));
   mrb_data_init(self, userdata, &mrb_io_uring_userdata_type);
-  userdata->type = ACCEPT;
-  userdata->salen = sizeof(userdata->sa);
+  *userdata = ACCEPT;
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@type"), mrb_symbol_value(mrb_intern_lit(mrb, "accept")));
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@sock"), sock);
 
   return self;
+}
+
+static mrb_value
+mrb_io_uring_userdata_to_tcpsocket(mrb_state *mrb, mrb_value self)
+{
+  mrb_value tcp_socket = mrb_funcall(mrb, mrb_obj_value(mrb_class_get(mrb, "TCPSocket")), "for_fd", 1, mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "@res")));
+  ((struct mrb_io *)DATA_PTR(tcp_socket))->close_fd = 0;
+  return tcp_socket;
 }
 
 static mrb_value
@@ -266,9 +279,9 @@ mrb_io_uring_recv_userdata_init(mrb_state *mrb, mrb_value self)
   mrb_get_args(mrb, "ooo", &ring_val, &sock, &buf);
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "ring"), ring_val);
 
-  mrb_io_uring_userdata_t *userdata = mrb_realloc(mrb, DATA_PTR(self), sizeof(*userdata));
+  enum mrb_io_uring_userdata_types *userdata = mrb_realloc(mrb, DATA_PTR(self), sizeof(*userdata));
   mrb_data_init(self, userdata, &mrb_io_uring_userdata_type);
-  userdata->type = RECV;
+  *userdata = RECV;
 
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@type"), mrb_symbol_value(mrb_intern_lit(mrb, "recv")));
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@sock"), sock);
@@ -284,9 +297,9 @@ mrb_io_uring_splice_userdata_init(mrb_state *mrb, mrb_value self)
   mrb_get_args(mrb, "ooo", &ring_val, &fd_in, &fd_out);
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "ring"), ring_val);
 
-  mrb_io_uring_userdata_t *userdata = mrb_realloc(mrb, DATA_PTR(self), sizeof(*userdata));
+  enum mrb_io_uring_userdata_types *userdata = mrb_realloc(mrb, DATA_PTR(self), sizeof(*userdata));
   mrb_data_init(self, userdata, &mrb_io_uring_userdata_type);
-  userdata->type = SPLICE;
+  *userdata = SPLICE;
 
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@type"), mrb_symbol_value(mrb_intern_lit(mrb, "splice")));
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@sock"), mrb_assoc_new(mrb, fd_in, fd_out));
@@ -301,9 +314,9 @@ mrb_io_uring_send_userdata_init(mrb_state *mrb, mrb_value self)
   mrb_get_args(mrb, "ooo", &ring_val, &sock, &buf);
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "ring"), ring_val);
 
-  mrb_io_uring_userdata_t *userdata = mrb_realloc(mrb, DATA_PTR(self), sizeof(*userdata));
+  enum mrb_io_uring_userdata_types *userdata = mrb_realloc(mrb, DATA_PTR(self), sizeof(*userdata));
   mrb_data_init(self, userdata, &mrb_io_uring_userdata_type);
-  userdata->type = SEND;
+  *userdata = SEND;
 
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@type"), mrb_symbol_value(mrb_intern_lit(mrb, "send")));
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@sock"), sock);
@@ -319,9 +332,9 @@ mrb_io_uring_shutdown_userdata_init(mrb_state *mrb, mrb_value self)
   mrb_get_args(mrb, "oo", &ring_val, &sock);
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "ring"), ring_val);
 
-  mrb_io_uring_userdata_t *userdata = mrb_realloc(mrb, DATA_PTR(self), sizeof(*userdata));
+  enum mrb_io_uring_userdata_types *userdata = mrb_realloc(mrb, DATA_PTR(self), sizeof(*userdata));
   mrb_data_init(self, userdata, &mrb_io_uring_userdata_type);
-  userdata->type = SHUTDOWN;
+  *userdata = SHUTDOWN;
 
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@type"), mrb_symbol_value(mrb_intern_lit(mrb, "shutdown")));
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@sock"), sock);
@@ -336,9 +349,9 @@ mrb_io_uring_close_userdata_init(mrb_state *mrb, mrb_value self)
   mrb_get_args(mrb, "oo", &ring_val, &sock);
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "ring"), ring_val);
 
-  mrb_io_uring_userdata_t *userdata = mrb_realloc(mrb, DATA_PTR(self), sizeof(*userdata));
+  enum mrb_io_uring_userdata_types *userdata = mrb_realloc(mrb, DATA_PTR(self), sizeof(*userdata));
   mrb_data_init(self, userdata, &mrb_io_uring_userdata_type);
-  userdata->type = CLOSE;
+  *userdata = CLOSE;
 
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@type"), mrb_symbol_value(mrb_intern_lit(mrb, "close")));
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@sock"), sock);
@@ -353,9 +366,9 @@ mrb_io_uring_poll_add_userdata_init(mrb_state *mrb, mrb_value self)
   mrb_get_args(mrb, "oo", &ring_val, &sock);
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "ring"), ring_val);
 
-  mrb_io_uring_userdata_t *userdata = mrb_realloc(mrb, DATA_PTR(self), sizeof(*userdata));
+  enum mrb_io_uring_userdata_types *userdata = mrb_realloc(mrb, DATA_PTR(self), sizeof(*userdata));
   mrb_data_init(self, userdata, &mrb_io_uring_userdata_type);
-  userdata->type = POLLADD;
+  *userdata = POLLADD;
 
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@type"), mrb_symbol_value(mrb_intern_lit(mrb, "poll_add")));
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@sock"), sock);
@@ -364,52 +377,17 @@ mrb_io_uring_poll_add_userdata_init(mrb_state *mrb, mrb_value self)
 }
 
 static mrb_value
-sa2addrlist(mrb_state *mrb, const struct sockaddr *sa, socklen_t salen)
-{
-  mrb_sym afstr;
-  in_port_t port;
-
-  switch (sa->sa_family) {
-  case AF_INET:
-    afstr = mrb_intern_lit(mrb, "AF_INET");
-    port = ((struct sockaddr_in*)sa)->sin_port;
-    break;
-  case AF_INET6:
-    afstr = mrb_intern_lit(mrb, "AF_INET6");
-    port = ((struct sockaddr_in6*)sa)->sin6_port;
-    break;
-  default:
-    mrb_raise(mrb, E_ARGUMENT_ERROR, "bad af");
-    return mrb_nil_value();
-  }
-  port = ntohs(port);
-  mrb_value host = mrb_str_new_capa(mrb, NI_MAXHOST);
-  if (unlikely(getnameinfo((struct sockaddr*)sa, salen, RSTRING_PTR(host), NI_MAXHOST, NULL, 0, NI_NUMERICHOST) == -1))
-    mrb_sys_fail(mrb, "getnameinfo");
-  mrb_str_resize(mrb, host, strlen(RSTRING_PTR(host)));
-  mrb_value ary = mrb_ary_new_capa(mrb, 3);
-  mrb_ary_push(mrb, ary, mrb_symbol_value(afstr));
-  mrb_ary_push(mrb, ary, mrb_fixnum_value(port));
-  mrb_ary_push(mrb, ary, host);
-  return ary;
-}
-
-static mrb_value
 mrb_io_uring_process_cqe(mrb_state *mrb, struct io_uring_cqe *cqe)
 {
   mrb_value userdata = mrb_obj_value(io_uring_cqe_get_data(cqe));
-  mrb_iv_set(mrb, userdata, mrb_intern_lit(mrb, "@res"), mrb_fixnum_value(cqe->res));
-  mrb_io_uring_userdata_t *userdata_t = DATA_PTR(userdata);
+  mrb_value res = mrb_fixnum_value(cqe->res);
+  mrb_iv_set(mrb, userdata, mrb_intern_lit(mrb, "@res"), res);
+  enum mrb_io_uring_userdata_types *userdata_t = DATA_PTR(userdata);
 
   if (likely(cqe->res >= 0)) {
-    switch(userdata_t->type) {
+    switch(*userdata_t) {
       case SOCKET:
-        mrb_iv_set(mrb, userdata, mrb_intern_lit(mrb, "@sock"), mrb_fixnum_value(cqe->res));
-      break;
-      case ACCEPT:
-        mrb_iv_set(mrb, userdata,
-        mrb_intern_lit(mrb, "@addrlist"),
-        sa2addrlist(mrb, (struct sockaddr*)&userdata_t->sa, userdata_t->salen));
+        mrb_iv_set(mrb, userdata, mrb_intern_lit(mrb, "@sock"), res);
       break;
       case RECV:
         mrb_str_resize(mrb, mrb_iv_get(mrb, userdata, mrb_intern_lit(mrb, "@buf")), cqe->res);
@@ -423,6 +401,41 @@ mrb_io_uring_process_cqe(mrb_state *mrb, struct io_uring_cqe *cqe)
   }
 
   return userdata;
+}
+
+static mrb_value
+mrb_io_uring_iterate_over_cqes(mrb_state *mrb, mrb_value self, struct io_uring *ring, mrb_value block, struct io_uring_cqe *cqe)
+{
+  unsigned head;
+  unsigned i = 0;
+  mrb_value sqes = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "sqes"));
+
+  if (mrb_type(block) == MRB_TT_PROC) {
+    int arena_index = mrb_gc_arena_save(mrb);
+    io_uring_for_each_cqe(ring, head, cqe) {
+      mrb_value userdata = mrb_io_uring_process_cqe(mrb, cqe);
+      mrb_yield(mrb, block, userdata);
+      mrb_hash_delete_key(mrb, sqes, userdata);
+      mrb_gc_arena_restore(mrb, arena_index);
+      i++;
+    }
+    io_uring_cq_advance(ring, i);
+
+    return self;
+  } else {
+    mrb_value userdatas = mrb_ary_new_capa(mrb, mrb_hash_size(mrb, sqes));
+    int arena_index = mrb_gc_arena_save(mrb);
+    io_uring_for_each_cqe(ring, head, cqe) {
+      mrb_value userdata = mrb_io_uring_process_cqe(mrb, cqe);
+      mrb_ary_push(mrb, userdatas, userdata);
+      mrb_hash_delete_key(mrb, sqes, userdata);
+      mrb_gc_arena_restore(mrb, arena_index);
+      i++;
+    }
+    io_uring_cq_advance(ring, i);
+
+    return userdatas;
+  }
 }
 
 static mrb_value
@@ -458,35 +471,7 @@ mrb_io_uring_wait_cqe_timeout(mrb_state *mrb, mrb_value self)
     mrb_sys_fail(mrb, "io_uring_wait_cqe_timeout");
   }
 
-  unsigned head;
-  unsigned i = 0;
-  mrb_value sqes = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "sqes"));
-  if (mrb_block_given_p(mrb)) {
-    int arena_index = mrb_gc_arena_save(mrb);
-    io_uring_for_each_cqe(ring, head, cqe) {
-      mrb_value userdata = mrb_io_uring_process_cqe(mrb, cqe);
-      mrb_yield(mrb, block, userdata);
-      mrb_hash_delete_key(mrb, sqes, userdata);
-      mrb_gc_arena_restore(mrb, arena_index);
-      i++;
-    }
-    io_uring_cq_advance(ring, i);
-  } else {
-    mrb_value userdatas = mrb_ary_new_capa(mrb, mrb_hash_size(mrb, sqes));
-    int arena_index = mrb_gc_arena_save(mrb);
-    io_uring_for_each_cqe(ring, head, cqe) {
-      mrb_value userdata = mrb_io_uring_process_cqe(mrb, cqe);
-      mrb_ary_push(mrb, userdatas, userdata);
-      mrb_hash_delete_key(mrb, sqes, userdata);
-      mrb_gc_arena_restore(mrb, arena_index);
-      i++;
-    }
-    io_uring_cq_advance(ring, i);
-
-    return userdatas;
-  }
-
-  return self;
+  return mrb_io_uring_iterate_over_cqes(mrb, self, ring, block, cqe);
 }
 
 static mrb_value
@@ -498,7 +483,9 @@ mrb_uring_sqe_flags_get(mrb_state *mrb, mrb_value self)
 static mrb_value
 mrb_uring_sqe_flags_set(mrb_state *mrb, mrb_value self)
 {
-  mrb_get_args(mrb, "i", &((struct io_uring_sqe *) DATA_PTR(self))->flags);
+  mrb_int flags;
+  mrb_get_args(mrb, "i", &flags);
+  ((struct io_uring_sqe *) DATA_PTR(self))->flags = (unsigned char) flags;
   return self;
 }
 
@@ -522,18 +509,18 @@ mrb_mruby_io_uring_gem_init(mrb_state* mrb)
 
   io_uring_class = mrb_define_class_under(mrb, mrb_class_get(mrb, "IO"), "Uring", mrb->object_class);
   MRB_SET_INSTANCE_TT(io_uring_class, MRB_TT_CDATA);
-  mrb_define_method(mrb, io_uring_class, "initialize",  mrb_io_uring_queue_init,      MRB_ARGS_OPT(2));
-  mrb_define_method(mrb, io_uring_class, "sqe",         mrb_io_uring_get_sqe_m,       MRB_ARGS_NONE());
-  mrb_define_method(mrb, io_uring_class, "submit",      mrb_io_uring_submit,          MRB_ARGS_NONE());
-  mrb_define_method(mrb, io_uring_class, "socket",  	  mrb_io_uring_prep_socket,     MRB_ARGS_ARG(2, 3));
-  mrb_define_method(mrb, io_uring_class, "accept",  	  mrb_io_uring_prep_accept,     MRB_ARGS_ARG(1, 2));
-  mrb_define_method(mrb, io_uring_class, "recv",  	    mrb_io_uring_prep_recv,       MRB_ARGS_ARG(1, 3));
-  mrb_define_method(mrb, io_uring_class, "splice",  	  mrb_io_uring_prep_splice,     MRB_ARGS_ARG(6, 1));
-  mrb_define_method(mrb, io_uring_class, "send",  	    mrb_io_uring_prep_send,       MRB_ARGS_ARG(2, 2));
-  mrb_define_method(mrb, io_uring_class, "shutdown",    mrb_io_uring_prep_shutdown,   MRB_ARGS_ARG(1, 2));
-  mrb_define_method(mrb, io_uring_class, "close",  	    mrb_io_uring_prep_close,      MRB_ARGS_ARG(1, 1));
-  mrb_define_method(mrb, io_uring_class, "poll_add",  	mrb_io_uring_prep_poll_add,   MRB_ARGS_ARG(1, 2));
-  mrb_define_method(mrb, io_uring_class, "wait",  	    mrb_io_uring_wait_cqe_timeout,MRB_ARGS_OPT(1));
+  mrb_define_method(mrb, io_uring_class, "initialize",    mrb_io_uring_queue_init,      MRB_ARGS_OPT(2));
+  mrb_define_method(mrb, io_uring_class, "sqe",           mrb_io_uring_get_sqe_m,       MRB_ARGS_NONE());
+  mrb_define_method(mrb, io_uring_class, "submit",        mrb_io_uring_submit,          MRB_ARGS_NONE());
+  mrb_define_method(mrb, io_uring_class, "prep_socket",  	mrb_io_uring_prep_socket,     MRB_ARGS_ARG(2, 3));
+  mrb_define_method(mrb, io_uring_class, "prep_accept",  	mrb_io_uring_prep_accept,     MRB_ARGS_ARG(1, 2));
+  mrb_define_method(mrb, io_uring_class, "prep_recv",  	  mrb_io_uring_prep_recv,       MRB_ARGS_ARG(1, 3));
+  mrb_define_method(mrb, io_uring_class, "prep_splice",  	mrb_io_uring_prep_splice,     MRB_ARGS_ARG(6, 1));
+  mrb_define_method(mrb, io_uring_class, "prep_send",  	  mrb_io_uring_prep_send,       MRB_ARGS_ARG(2, 2));
+  mrb_define_method(mrb, io_uring_class, "prep_shutdown", mrb_io_uring_prep_shutdown,   MRB_ARGS_ARG(1, 2));
+  mrb_define_method(mrb, io_uring_class, "prep_close",    mrb_io_uring_prep_close,      MRB_ARGS_ARG(1, 1));
+  mrb_define_method(mrb, io_uring_class, "prep_poll_add", mrb_io_uring_prep_poll_add,   MRB_ARGS_ARG(1, 2));
+  mrb_define_method(mrb, io_uring_class, "wait",  	      mrb_io_uring_wait_cqe_timeout,MRB_ARGS_OPT(1));
 
   io_uring_sqe_class = mrb_define_class_under(mrb, io_uring_class, "Sqe", mrb->object_class);
   MRB_SET_INSTANCE_TT(io_uring_class, MRB_TT_CDATA);
@@ -550,9 +537,12 @@ mrb_mruby_io_uring_gem_init(mrb_state* mrb)
 
   io_uring_socket_userdata_class = mrb_define_class_under(mrb, io_uring_class, "_SocketUserData", io_uring_userdata_class);
   mrb_define_method(mrb, io_uring_socket_userdata_class, "initialize", mrb_io_uring_socket_userdata_init, MRB_ARGS_REQ(1));
+  mrb_define_method(mrb, io_uring_socket_userdata_class, "to_tcpsocket", mrb_io_uring_userdata_to_tcpsocket, MRB_ARGS_NONE());
+  mrb_define_method(mrb, io_uring_socket_userdata_class, "to_tcpserver", mrb_io_uring_socket_userdata_to_tcpserver, MRB_ARGS_NONE());
 
   io_uring_accept_userdata_class = mrb_define_class_under(mrb, io_uring_class, "_AcceptUserData", io_uring_userdata_class);
   mrb_define_method(mrb, io_uring_accept_userdata_class, "initialize", mrb_io_uring_accept_userdata_init, MRB_ARGS_REQ(2));
+  mrb_define_method(mrb, io_uring_accept_userdata_class, "to_tcpsocket", mrb_io_uring_userdata_to_tcpsocket, MRB_ARGS_NONE());
 
   io_uring_recv_userdata_class = mrb_define_class_under(mrb, io_uring_class, "_RecvUserData", io_uring_userdata_class);
   mrb_define_method(mrb, io_uring_recv_userdata_class, "initialize", mrb_io_uring_recv_userdata_init, MRB_ARGS_REQ(3));

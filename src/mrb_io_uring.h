@@ -1,5 +1,4 @@
 #define _GNU_SOURCE
-#define NSEC_PER_SEC 1000000000
 #include <netinet/in.h>
 #include <netdb.h>
 #include <string.h>
@@ -13,15 +12,21 @@
 #include <mruby/string.h>
 #include <mruby/array.h>
 #include <mruby/io_uring.h>
+#include <mruby/proc.h>
 #include <sys/time.h>
+#include <stdlib.h>
+#include <mruby/ext/io.h>
 
+#ifndef NSEC_PER_SEC
+#define NSEC_PER_SEC 1000000000
+#endif
 
 #define likely(x) __builtin_expect(!!(x), 1)
 #define unlikely(x) __builtin_expect(!!(x), 0)
 
 #define NELEMS(argv) (sizeof(argv) / sizeof(argv[0]))
 
-enum userdata_types {
+enum mrb_io_uring_userdata_types {
   SOCKET,
   ACCEPT,
   RECV,
@@ -31,12 +36,6 @@ enum userdata_types {
   CLOSE,
   POLLADD
 };
-
-typedef struct {
-  enum userdata_types type;
-  struct sockaddr_storage sa;
-  socklen_t salen;
-} mrb_io_uring_userdata_t;
 
 static void
 mrb_io_uring_queue_exit_gc(mrb_state *mrb, void *p)
