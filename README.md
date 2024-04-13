@@ -54,6 +54,7 @@ while true
       when :incomplete, :parser_error
         uring.prep_close(userdata.sock)
         phr.reset
+        next
       when Integer
         puts "HTTP Method   : #{phr.method}"
         puts "HTTP Version  : 1.#{phr.minor_version}"
