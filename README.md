@@ -46,7 +46,7 @@ while true
     when :accept
       puts "Remote Address: #{userdata.to_tcpsocket.remote_address.inspect}"
       puts "Socket        : #{userdata.res}"
-      uring.prep_recv(userdata.res).prep_accept(userdata.sock)
+      uring.prep_recv(userdata.res).prep_accept(userdata.sock) # userdata.res is the accepted socket, userdata.sock is the socket passed to prep_accept, aka the server socket.
     when :recv
       next if userdata.res == 0
       ret = phr.parse_request(userdata.buf)
@@ -54,7 +54,6 @@ while true
       when :incomplete, :parser_error
         uring.prep_close(userdata.sock)
         phr.reset
-        next
       when Integer
         puts "HTTP Method   : #{phr.method}"
         puts "HTTP Version  : 1.#{phr.minor_version}"
@@ -76,58 +75,26 @@ uring.wait accepts a timeout as a float value, if a timeout occurs false is retu
 You can also use uring.wait without a block.
 It returns an array which you can then iterate over.
 
-Every instanced IO::Uring method accepts a sqe parameter as the last one, you can get a sqe by calling uring.sqe
+Every instanced IO::Uring prep method accepts a sqe parameter as the last one, you can get a sqe by calling uring.sqe
 ```ruby
-uring.send(socket, response, 0, uring.sqe)
+uring.prep_send(socket, response, 0, uring.sqe)
 ```
 
-Benchmark
-=========
-
-Tested on Windows 11 inside a wsl 2 VM. Ryzen 7 5800x, 32gb DDR 3200 Ram.
-```pre
-hey -z 3s -cpus 6 http://127.0.0.1:12345
-
-Summary:
-  Total:        3.0009 secs
-  Slowest:      0.0493 secs
-  Fastest:      0.0000 secs
-  Average:      0.0005 secs
-  Requests/sec: 95773.6435
-
-  Total data:   1724430 bytes
-  Size/request: 6 bytes
-
-Response time histogram:
-  0.000 [1]     |
-  0.005 [287204]        |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
-  0.010 [0]     |
-  0.015 [0]     |
-  0.020 [0]     |
-  0.025 [0]     |
-  0.030 [0]     |
-  0.035 [0]     |
-  0.039 [0]     |
-  0.044 [24]    |
-  0.049 [176]   |
+you can access a sqes flags by calling sqe.flags and sqe.flags=
 
 
-Latency distribution:
-  10% in 0.0003 secs
-  25% in 0.0003 secs
-  50% in 0.0004 secs
-  75% in 0.0006 secs
-  90% in 0.0008 secs
-  95% in 0.0009 secs
-  99% in 0.0015 secs
+LICENSE
+=======
+Copyright 2024 Hendrik Beskow
 
-Details (average, fastest, slowest):
-  DNS+dialup:   0.0000 secs, 0.0000 secs, 0.0493 secs
-  DNS-lookup:   0.0000 secs, 0.0000 secs, 0.0000 secs
-  req write:    0.0000 secs, 0.0000 secs, 0.0019 secs
-  resp wait:    0.0003 secs, 0.0000 secs, 0.0488 secs
-  resp read:    0.0001 secs, 0.0000 secs, 0.0023 secs
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this project except in compliance with the License.
+You may obtain a copy of the License at
 
-Status code distribution:
-  [200] 287405 responses
-```
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
