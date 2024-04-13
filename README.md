@@ -6,6 +6,15 @@ Requirements
 ============
 This requires at least Linux 5.6
 
+Installation
+============
+
+You have to install liburing with development headers first. Then add
+```ruby
+conf.gem mgem: 'mruby-io-uring'
+```
+to your build_config.rb
+
 Supported functions
 ===================
 
