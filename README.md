@@ -55,7 +55,9 @@ while true
     when :accept
       puts "Remote Address: #{userdata.to_tcpsocket.remote_address.inspect}"
       puts "Socket        : #{userdata.res}"
-      uring.prep_recv(userdata.res).prep_accept(userdata.sock) # userdata.res is the accepted socket, userdata.sock is the socket passed to prep_accept, aka the server socket.
+      uring.prep_recv(userdata.res).prep_accept(userdata.sock)
+      #userdata.res  is the accepted socket
+      #userdata.sock is the socket passed to prep_accept, aka the server socket.
     when :recv
       next if userdata.res == 0
       ret = phr.parse_request(userdata.buf)

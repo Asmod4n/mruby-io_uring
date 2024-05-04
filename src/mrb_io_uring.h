@@ -16,6 +16,7 @@
 #include <sys/time.h>
 #include <stdlib.h>
 #include <mruby/ext/io.h>
+#include <sys/poll.h>
 
 #ifndef NSEC_PER_SEC
 #define NSEC_PER_SEC 1000000000
@@ -34,7 +35,10 @@ enum mrb_io_uring_userdata_types {
   SEND,
   SHUTDOWN,
   CLOSE,
-  POLLADD
+  POLLADD,
+  POLLMULTISHOT,
+  POLLUPDATE,
+  CANCEL
 };
 
 static void
@@ -54,8 +58,4 @@ static const struct mrb_data_type mrb_io_uring_userdata_type = {
 
 static const struct mrb_data_type mrb_io_uring_sqe_type = {
   "$i_mrb_io_uring_sqe_type", NULL
-};
-
-static const struct mrb_data_type mrb_io_uring_cqe_type = {
-  "$i_mrb_io_uring_cqe_type", mrb_free
 };
