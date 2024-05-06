@@ -17,7 +17,7 @@ while true
       uring.prep_recv(userdata.res).prep_accept(server)
     when :recv
       next if userdata.res == 0
-      uring.prep_send(userdata.sock, response)
+      uring.prep_send(userdata.socket, response)
     end
   end
 end

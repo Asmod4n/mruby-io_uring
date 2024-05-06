@@ -1,3 +1,3 @@
 class IO::Uring::UserData
-  attr_reader :type, :sock, :buf, :res, :addrlist, :errno, :poll_mask
+  attr_reader :type, :socket, :buf, :res, :addrlist, :errno, :poll_mask
 end

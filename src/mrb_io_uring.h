@@ -17,6 +17,7 @@
 #include <stdlib.h>
 #include <mruby/ext/io.h>
 #include <sys/poll.h>
+#include <mruby/throw.h>
 
 #ifndef NSEC_PER_SEC
 #define NSEC_PER_SEC 1000000000

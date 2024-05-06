@@ -55,15 +55,15 @@ while true
     when :accept
       puts "Remote Address: #{userdata.to_tcpsocket.remote_address.inspect}"
       puts "Socket        : #{userdata.res}"
-      uring.prep_recv(userdata.res).prep_accept(userdata.sock)
+      uring.prep_recv(userdata.res).prep_accept(userdata.socket)
       #userdata.res  is the accepted socket
-      #userdata.sock is the socket passed to prep_accept, aka the server socket.
+      #userdata.socket is the socket passed to prep_accept, aka the server socket.
     when :recv
       next if userdata.res == 0
       ret = phr.parse_request(userdata.buf)
       case ret
       when :incomplete, :parser_error
-        uring.prep_close(userdata.sock)
+        uring.prep_close(userdata.socket)
         phr.reset
         next
       when Integer
@@ -74,9 +74,9 @@ while true
         puts "HTTP Body     : #{userdata.buf.byteslice(ret..-1).inspect}"
       end
       phr.reset
-      uring.prep_send(userdata.sock, response)
+      uring.prep_send(userdata.socket, response)
     when :send
-      uring.prep_close(userdata.sock)
+      uring.prep_close(userdata.socket)
     end
   end
 end
