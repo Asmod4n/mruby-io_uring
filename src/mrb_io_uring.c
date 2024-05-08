@@ -327,6 +327,15 @@ mrb_io_uring_socket_userdata_to_tcpserver(mrb_state *mrb, mrb_value self)
 }
 
 static mrb_value
+mrb_io_uring_socket_userdata_to_udpsocket(mrb_state *mrb, mrb_value self)
+{
+  mrb_value res = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "@res"));
+  mrb_value tcp_server = mrb_funcall(mrb, mrb_obj_value(mrb_class_get(mrb, "UDPSocket")), "for_fd", 1, res);
+  ((struct mrb_io *)DATA_PTR(tcp_server))->close_fd = 0;
+  return tcp_server;
+}
+
+static mrb_value
 mrb_io_uring_socket_userdata_to_basicsocket(mrb_state *mrb, mrb_value self)
 {
   mrb_value res = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "@res"));
@@ -725,6 +734,7 @@ mrb_mruby_io_uring_gem_init(mrb_state* mrb)
   mrb_define_method(mrb, io_uring_socket_userdata_class, "initialize", mrb_io_uring_socket_userdata_init, MRB_ARGS_REQ(1));
   mrb_define_method(mrb, io_uring_socket_userdata_class, "to_tcpsocket", mrb_io_uring_userdata_to_tcpsocket, MRB_ARGS_NONE());
   mrb_define_method(mrb, io_uring_socket_userdata_class, "to_tcpserver", mrb_io_uring_socket_userdata_to_tcpserver, MRB_ARGS_NONE());
+  mrb_define_method(mrb, io_uring_socket_userdata_class, "to_udpsocket", mrb_io_uring_socket_userdata_to_udpsocket, MRB_ARGS_NONE());
   mrb_define_method(mrb, io_uring_socket_userdata_class, "to_basicsocket", mrb_io_uring_socket_userdata_to_basicsocket, MRB_ARGS_NONE());
 
   io_uring_accept_userdata_class = mrb_define_class_under(mrb, io_uring_class, "_AcceptUserData", io_uring_userdata_class);
