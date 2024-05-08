@@ -688,13 +688,19 @@ mrb_uring_sqe_io_link(mrb_state *mrb, mrb_value self)
 static mrb_value
 mrb_uring_readable(mrb_state *mrb, mrb_value self)
 {
-  return mrb_bool_value(mrb_fixnum(mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "@res"))) & POLLIN);
+  mrb_value res = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "@res"));
+  if (likely(mrb_integer_p(res)))
+    return mrb_bool_value(mrb_integer(res) & POLLIN);
+  return mrb_false_value();
 }
 
 static mrb_value
 mrb_uring_writable(mrb_state *mrb, mrb_value self)
 {
-  return mrb_bool_value(mrb_fixnum(mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "@res"))) & POLLOUT);
+  mrb_value res = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "@res"));
+  if (likely(mrb_integer_p(res)))
+    return mrb_bool_value(mrb_integer(res) & POLLOUT);
+  return mrb_false_value();
 }
 
 void
