@@ -330,18 +330,36 @@ static mrb_value
 mrb_io_uring_socket_userdata_to_udpsocket(mrb_state *mrb, mrb_value self)
 {
   mrb_value res = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "@res"));
-  mrb_value tcp_server = mrb_funcall(mrb, mrb_obj_value(mrb_class_get(mrb, "UDPSocket")), "for_fd", 1, res);
-  ((struct mrb_io *)DATA_PTR(tcp_server))->close_fd = 0;
-  return tcp_server;
+  mrb_value udp_socket = mrb_funcall(mrb, mrb_obj_value(mrb_class_get(mrb, "UDPSocket")), "for_fd", 1, res);
+  ((struct mrb_io *)DATA_PTR(udp_socket))->close_fd = 0;
+  return udp_socket;
 }
 
 static mrb_value
-mrb_io_uring_socket_userdata_to_basicsocket(mrb_state *mrb, mrb_value self)
+mrb_io_uring_socket_userdata_to_socket(mrb_state *mrb, mrb_value self)
 {
   mrb_value res = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "@res"));
-  mrb_value tcp_socket = mrb_funcall(mrb, mrb_obj_value(mrb_class_get(mrb, "BasicSocket")), "for_fd", 1, res);
-  ((struct mrb_io *)DATA_PTR(tcp_socket))->close_fd = 0;
-  return tcp_socket;
+  mrb_value socket = mrb_funcall(mrb, mrb_obj_value(mrb_class_get(mrb, "Socket")), "for_fd", 1, res);
+  ((struct mrb_io *)DATA_PTR(socket))->close_fd = 0;
+  return socket;
+}
+
+static mrb_value
+mrb_io_uring_socket_userdata_to_unixsocket(mrb_state *mrb, mrb_value self)
+{
+  mrb_value res = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "@res"));
+  mrb_value unix_socket = mrb_funcall(mrb, mrb_obj_value(mrb_class_get(mrb, "UNIXSocket")), "for_fd", 1, res);
+  ((struct mrb_io *)DATA_PTR(unix_socket))->close_fd = 0;
+  return unix_socket;
+}
+
+static mrb_value
+mrb_io_uring_socket_userdata_to_unixserver(mrb_state *mrb, mrb_value self)
+{
+  mrb_value res = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "@res"));
+  mrb_value unix_server = mrb_funcall(mrb, mrb_obj_value(mrb_class_get(mrb, "UNIXServer")), "for_fd", 1, res);
+  ((struct mrb_io *)DATA_PTR(unix_server))->close_fd = 0;
+  return unix_server;
 }
 
 static mrb_value
@@ -731,15 +749,18 @@ mrb_mruby_io_uring_gem_init(mrb_state* mrb)
   MRB_SET_INSTANCE_TT(io_uring_userdata_class, MRB_TT_CDATA);
 
   io_uring_socket_userdata_class = mrb_define_class_under(mrb, io_uring_class, "_SocketUserData", io_uring_userdata_class);
-  mrb_define_method(mrb, io_uring_socket_userdata_class, "initialize", mrb_io_uring_socket_userdata_init, MRB_ARGS_REQ(1));
-  mrb_define_method(mrb, io_uring_socket_userdata_class, "to_tcpsocket", mrb_io_uring_userdata_to_tcpsocket, MRB_ARGS_NONE());
-  mrb_define_method(mrb, io_uring_socket_userdata_class, "to_tcpserver", mrb_io_uring_socket_userdata_to_tcpserver, MRB_ARGS_NONE());
-  mrb_define_method(mrb, io_uring_socket_userdata_class, "to_udpsocket", mrb_io_uring_socket_userdata_to_udpsocket, MRB_ARGS_NONE());
-  mrb_define_method(mrb, io_uring_socket_userdata_class, "to_basicsocket", mrb_io_uring_socket_userdata_to_basicsocket, MRB_ARGS_NONE());
+  mrb_define_method(mrb, io_uring_socket_userdata_class, "initialize",    mrb_io_uring_socket_userdata_init,          MRB_ARGS_REQ(1));
+  mrb_define_method(mrb, io_uring_socket_userdata_class, "to_tcpsocket",  mrb_io_uring_userdata_to_tcpsocket,         MRB_ARGS_NONE());
+  mrb_define_method(mrb, io_uring_socket_userdata_class, "to_tcpserver",  mrb_io_uring_socket_userdata_to_tcpserver,  MRB_ARGS_NONE());
+  mrb_define_method(mrb, io_uring_socket_userdata_class, "to_udpsocket",  mrb_io_uring_socket_userdata_to_udpsocket,  MRB_ARGS_NONE());
+  mrb_define_method(mrb, io_uring_socket_userdata_class, "to_socket",     mrb_io_uring_socket_userdata_to_socket,     MRB_ARGS_NONE());
+  mrb_define_method(mrb, io_uring_socket_userdata_class, "to_unixsocket", mrb_io_uring_socket_userdata_to_unixsocket, MRB_ARGS_NONE());
+  mrb_define_method(mrb, io_uring_socket_userdata_class, "to_unixserver", mrb_io_uring_socket_userdata_to_unixserver, MRB_ARGS_NONE());
 
   io_uring_accept_userdata_class = mrb_define_class_under(mrb, io_uring_class, "_AcceptUserData", io_uring_userdata_class);
-  mrb_define_method(mrb, io_uring_accept_userdata_class, "initialize", mrb_io_uring_accept_userdata_init, MRB_ARGS_REQ(2));
-  mrb_define_method(mrb, io_uring_accept_userdata_class, "to_tcpsocket", mrb_io_uring_userdata_to_tcpsocket, MRB_ARGS_NONE());
+  mrb_define_method(mrb, io_uring_accept_userdata_class, "initialize",    mrb_io_uring_accept_userdata_init,          MRB_ARGS_REQ(2));
+  mrb_define_method(mrb, io_uring_accept_userdata_class, "to_tcpsocket",  mrb_io_uring_userdata_to_tcpsocket,         MRB_ARGS_NONE());
+  mrb_define_method(mrb, io_uring_accept_userdata_class, "to_unixsocket", mrb_io_uring_socket_userdata_to_unixsocket, MRB_ARGS_NONE());
 
   io_uring_recv_userdata_class = mrb_define_class_under(mrb, io_uring_class, "_RecvUserData", io_uring_userdata_class);
   mrb_define_method(mrb, io_uring_recv_userdata_class, "initialize", mrb_io_uring_recv_userdata_init, MRB_ARGS_REQ(3));
@@ -759,20 +780,20 @@ mrb_mruby_io_uring_gem_init(mrb_state* mrb)
   io_uring_poll_add_userdata_class = mrb_define_class_under(mrb, io_uring_class, "_PollAddUserData", io_uring_userdata_class);
   mrb_define_method(mrb, io_uring_poll_add_userdata_class, "initialize",  mrb_io_uring_poll_add_userdata_init,  MRB_ARGS_REQ(2));
   mrb_define_method(mrb, io_uring_poll_add_userdata_class, "update",      mrb_io_uring_prep_poll_update,        MRB_ARGS_REQ(2));
-  mrb_define_method(mrb, io_uring_poll_add_userdata_class, "readable?", mrb_uring_readable, MRB_ARGS_NONE());
-  mrb_define_method(mrb, io_uring_poll_add_userdata_class, "writable?", mrb_uring_writable, MRB_ARGS_NONE());
+  mrb_define_method(mrb, io_uring_poll_add_userdata_class, "readable?",   mrb_uring_readable, MRB_ARGS_NONE());
+  mrb_define_method(mrb, io_uring_poll_add_userdata_class, "writable?",   mrb_uring_writable, MRB_ARGS_NONE());
 
   io_uring_poll_multishot_userdata_class = mrb_define_class_under(mrb, io_uring_class, "_PollMultishotUserData", io_uring_userdata_class);
   mrb_define_method(mrb, io_uring_poll_multishot_userdata_class, "initialize",  mrb_io_uring_poll_multishot_userdata_init,  MRB_ARGS_REQ(2));
-  mrb_define_method(mrb, io_uring_poll_multishot_userdata_class, "update",      mrb_io_uring_prep_poll_update,                  MRB_ARGS_REQ(2));
-  mrb_define_method(mrb, io_uring_poll_multishot_userdata_class, "readable?", mrb_uring_readable, MRB_ARGS_NONE());
-  mrb_define_method(mrb, io_uring_poll_multishot_userdata_class, "writable?", mrb_uring_writable, MRB_ARGS_NONE());
+  mrb_define_method(mrb, io_uring_poll_multishot_userdata_class, "update",      mrb_io_uring_prep_poll_update,              MRB_ARGS_REQ(2));
+  mrb_define_method(mrb, io_uring_poll_multishot_userdata_class, "readable?",   mrb_uring_readable, MRB_ARGS_NONE());
+  mrb_define_method(mrb, io_uring_poll_multishot_userdata_class, "writable?",   mrb_uring_writable, MRB_ARGS_NONE());
 
   io_uring_poll_update_userdata_class = mrb_define_class_under(mrb, io_uring_class, "_PollUpdateUserData", io_uring_userdata_class);
   mrb_define_method(mrb, io_uring_poll_update_userdata_class, "initialize", mrb_io_uring_poll_update_userdata_init, MRB_ARGS_REQ(2));
   mrb_define_method(mrb, io_uring_poll_update_userdata_class, "update",     mrb_io_uring_prep_poll_update,          MRB_ARGS_REQ(2));
-  mrb_define_method(mrb, io_uring_poll_update_userdata_class, "readable?", mrb_uring_readable, MRB_ARGS_NONE());
-  mrb_define_method(mrb, io_uring_poll_update_userdata_class, "writable?", mrb_uring_writable, MRB_ARGS_NONE());
+  mrb_define_method(mrb, io_uring_poll_update_userdata_class, "readable?",  mrb_uring_readable, MRB_ARGS_NONE());
+  mrb_define_method(mrb, io_uring_poll_update_userdata_class, "writable?",  mrb_uring_writable, MRB_ARGS_NONE());
 
   io_uring_cancel_userdata_class = mrb_define_class_under(mrb, io_uring_class, "_CancelUserData", io_uring_userdata_class);
   mrb_define_method(mrb, io_uring_cancel_userdata_class, "initialize", mrb_io_uring_cancel_userdata_init, MRB_ARGS_REQ(2));
