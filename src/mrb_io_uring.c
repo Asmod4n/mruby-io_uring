@@ -81,7 +81,7 @@ mrb_io_uring_prep_accept(mrb_state *mrb, mrb_value self)
   io_uring_sqe_set_data(sqe, mrb_ptr(userdata));
 
   io_uring_prep_accept(sqe,
-  (int) mrb_fixnum(mrb_convert_type(mrb, sock, MRB_TT_INTEGER, "Integer", "fileno")),
+  (int) mrb_integer(mrb_convert_type(mrb, sock, MRB_TT_INTEGER, "Integer", "fileno")),
   NULL, NULL,
   (int) flags);
 
@@ -97,7 +97,7 @@ mrb_io_uring_prep_recv(mrb_state *mrb, mrb_value self)
   mrb_int len = 0, flags = 0;
   struct io_uring_sqe *sqe = NULL;
   mrb_get_args(mrb, "o|iid", &sock, &len, &flags, &sqe, &mrb_io_uring_sqe_type);
-  int socket = (int) mrb_fixnum(mrb_convert_type(mrb, sock, MRB_TT_INTEGER, "Integer", "fileno"));
+  int socket = (int) mrb_integer(mrb_convert_type(mrb, sock, MRB_TT_INTEGER, "Integer", "fileno"));
   if (len <= 0) {
     int rcvbuf = 0;
     socklen_t optlen = sizeof(rcvbuf);
@@ -142,8 +142,8 @@ mrb_io_uring_prep_splice(mrb_state *mrb, mrb_value self)
   io_uring_sqe_set_data(sqe, mrb_ptr(userdata));
 
   io_uring_prep_splice(sqe,
-  (int) mrb_fixnum(mrb_convert_type(mrb, fd_in,  MRB_TT_INTEGER, "Integer", "fileno")), off_in,
-  (int) mrb_fixnum(mrb_convert_type(mrb, fd_out, MRB_TT_INTEGER, "Integer", "fileno")), off_out,
+  (int) mrb_integer(mrb_convert_type(mrb, fd_in,  MRB_TT_INTEGER, "Integer", "fileno")), off_in,
+  (int) mrb_integer(mrb_convert_type(mrb, fd_out, MRB_TT_INTEGER, "Integer", "fileno")), off_out,
   (unsigned int) nbytes, (unsigned int) splice_flags);
 
   mrb_hash_set(mrb, mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "sqes")), userdata, mrb_assoc_new(mrb, fd_in, fd_out));
@@ -167,7 +167,7 @@ mrb_io_uring_prep_send(mrb_state *mrb, mrb_value self)
   io_uring_sqe_set_data(sqe, mrb_ptr(userdata));
 
   io_uring_prep_send(sqe,
-  (int) mrb_fixnum(mrb_convert_type(mrb, sock, MRB_TT_INTEGER, "Integer", "fileno")),
+  (int) mrb_integer(mrb_convert_type(mrb, sock, MRB_TT_INTEGER, "Integer", "fileno")),
   RSTRING_PTR(buf), RSTRING_LEN(buf),
   (int) flags);
 
@@ -190,7 +190,7 @@ mrb_io_uring_prep_shutdown(mrb_state *mrb, mrb_value self)
   mrb_value argv[] = { self, sock };
   mrb_value userdata = mrb_obj_new(mrb, mrb_class_get_under(mrb, mrb_class(mrb, self), "_ShutdownUserData"), NELEMS(argv), argv);
   io_uring_sqe_set_data(sqe, mrb_ptr(userdata));
-  io_uring_prep_shutdown(sqe, (int) mrb_fixnum(mrb_convert_type(mrb, sock, MRB_TT_INTEGER, "Integer", "fileno")), (int) how);
+  io_uring_prep_shutdown(sqe, (int) mrb_integer(mrb_convert_type(mrb, sock, MRB_TT_INTEGER, "Integer", "fileno")), (int) how);
   mrb_hash_set(mrb, mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "sqes")), userdata, sock);
 
   return userdata;
@@ -209,7 +209,7 @@ mrb_io_uring_prep_close(mrb_state *mrb, mrb_value self)
   mrb_value argv[] = { self, sock };
   mrb_value userdata = mrb_obj_new(mrb, mrb_class_get_under(mrb, mrb_class(mrb, self), "_CloseUserData"), NELEMS(argv), argv);
   io_uring_sqe_set_data(sqe, mrb_ptr(userdata));
-  io_uring_prep_close(sqe, (int) mrb_fixnum(mrb_convert_type(mrb, sock, MRB_TT_INTEGER, "Integer", "fileno")));
+  io_uring_prep_close(sqe, (int) mrb_integer(mrb_convert_type(mrb, sock, MRB_TT_INTEGER, "Integer", "fileno")));
   mrb_hash_set(mrb, mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "sqes")), userdata, sock);
 
   return userdata;
@@ -229,7 +229,7 @@ mrb_io_uring_prep_poll_add(mrb_state *mrb, mrb_value self)
   mrb_value argv[] = { self, sock, mrb_fixnum_value(poll_mask) };
   mrb_value userdata = mrb_obj_new(mrb, mrb_class_get_under(mrb, mrb_class(mrb, self), "_PollAddUserData"), NELEMS(argv), argv);
   io_uring_sqe_set_data(sqe, mrb_ptr(userdata));
-  io_uring_prep_poll_add(sqe, (int) mrb_fixnum(mrb_convert_type(mrb, sock, MRB_TT_INTEGER, "Integer", "fileno")), (unsigned int) poll_mask);
+  io_uring_prep_poll_add(sqe, (int) mrb_integer(mrb_convert_type(mrb, sock, MRB_TT_INTEGER, "Integer", "fileno")), (unsigned int) poll_mask);
   mrb_hash_set(mrb, mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "sqes")), userdata, sock);
 
   return userdata;
@@ -249,7 +249,7 @@ mrb_io_uring_prep_poll_multishot(mrb_state *mrb, mrb_value self)
   mrb_value argv[] = { self, sock, mrb_fixnum_value(poll_mask) };
   mrb_value userdata = mrb_obj_new(mrb, mrb_class_get_under(mrb, mrb_class(mrb, self), "_PollMultishotUserData"), NELEMS(argv), argv);
   io_uring_sqe_set_data(sqe, mrb_ptr(userdata));
-  io_uring_prep_poll_multishot(sqe, (int) mrb_fixnum(mrb_convert_type(mrb, sock, MRB_TT_INTEGER, "Integer", "fileno")), (unsigned int) poll_mask);
+  io_uring_prep_poll_multishot(sqe, (int) mrb_integer(mrb_convert_type(mrb, sock, MRB_TT_INTEGER, "Integer", "fileno")), (unsigned int) poll_mask);
   mrb_hash_set(mrb, mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "sqes")), userdata, sock);
 
   return userdata;
@@ -578,35 +578,36 @@ mrb_io_uring_process_cqe(mrb_state *mrb, struct io_uring_cqe *cqe)
 static mrb_value
 mrb_io_uring_iterate_over_cqes(mrb_state *mrb, mrb_value self, struct io_uring *ring, mrb_value block, struct io_uring_cqe *cqe)
 {
+  mrb_value sqes = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "sqes"));
   unsigned head;
   unsigned int i = 0;
-  mrb_value sqes = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "sqes"));
 
   if (mrb_type(block) == MRB_TT_PROC) {
-    int arena_index = mrb_gc_arena_save(mrb);
     struct mrb_jmpbuf* prev_jmp = mrb->jmp;
     struct mrb_jmpbuf c_jmp;
-    io_uring_for_each_cqe(ring, head, cqe) {
-      MRB_TRY(&c_jmp)
-      {
-        mrb->jmp = &c_jmp;
+    int arena_index = mrb_gc_arena_save(mrb);
+    MRB_TRY(&c_jmp)
+    {
+      mrb->jmp = &c_jmp;
+      io_uring_for_each_cqe(ring, head, cqe) {
         mrb_value userdata = mrb_io_uring_process_cqe(mrb, cqe);
         mrb_yield(mrb, block, userdata);
-        if (!(cqe->flags & IORING_CQE_F_MORE))
+        if (!(cqe->flags & IORING_CQE_F_MORE)) {
           mrb_hash_delete_key(mrb, sqes, userdata);
-        mrb->jmp = prev_jmp;
+        }
+        mrb_gc_arena_restore(mrb, arena_index);
+        i++;
       }
-      MRB_CATCH(&c_jmp)
-      {
-        mrb->jmp = prev_jmp;
-        io_uring_cq_advance(ring, i);
-        MRB_THROW(mrb->jmp);
-      }
-      MRB_END_EXC(&c_jmp);
-      mrb_gc_arena_restore(mrb, arena_index);
-      i++;
+      io_uring_cq_advance(ring, i);
+      mrb->jmp = prev_jmp;
     }
-    io_uring_cq_advance(ring, i);
+    MRB_CATCH(&c_jmp)
+    {
+      mrb->jmp = prev_jmp;
+      io_uring_cq_advance(ring, i);
+      MRB_THROW(mrb->jmp);
+    }
+    MRB_END_EXC(&c_jmp);
 
     return self;
   } else {
@@ -615,8 +616,9 @@ mrb_io_uring_iterate_over_cqes(mrb_state *mrb, mrb_value self, struct io_uring *
     io_uring_for_each_cqe(ring, head, cqe) {
       mrb_value userdata = mrb_io_uring_process_cqe(mrb, cqe);
       mrb_ary_push(mrb, userdatas, userdata);
-      if (!(cqe->flags & IORING_CQE_F_MORE))
+      if (!(cqe->flags & IORING_CQE_F_MORE)) {
         mrb_hash_delete_key(mrb, sqes, userdata);
+      }
       mrb_gc_arena_restore(mrb, arena_index);
       i++;
     }

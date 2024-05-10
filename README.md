@@ -42,7 +42,6 @@ headers = "HTTP/1.1 200 OK\r\nConnection: keep-alive\r\nContent-Type: text/plain
 response = "#{headers}#{body}"
 uring = IO::Uring.new
 server = TCPServer.new(12345)
-server._setnonblock(true)
 server.listen(4096)
 uring.prep_accept(server)
 
@@ -55,7 +54,8 @@ while true
     when :accept
       puts "Remote Address: #{userdata.to_tcpsocket.remote_address.inspect}"
       puts "Socket        : #{userdata.res}"
-      uring.prep_recv(userdata.res).prep_accept(userdata.socket)
+      uring.prep_recv(userdata.res)
+      uring.prep_accept(userdata.socket)
       #userdata.res  is the accepted socket
       #userdata.socket is the socket passed to prep_accept, aka the server socket.
     when :recv
