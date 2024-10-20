@@ -43,27 +43,26 @@ response = "#{headers}#{body}"
 uring = IO::Uring.new
 server = TCPServer.new(12345)
 server.listen(4096)
-uring.prep_accept(server)
+uring.prep_multishot_accept(server)
 
 phr = Phr.new
 
 while true
-  uring.wait do |userdata|
-    raise userdata.errno if userdata.errno
-    case userdata.type
-    when :accept
-      puts "Remote Address: #{userdata.to_tcpsocket.remote_address.inspect}"
-      puts "Socket        : #{userdata.res}"
-      uring.prep_recv(userdata.res)
-      uring.prep_accept(userdata.socket)
-      #userdata.res  is the accepted socket
-      #userdata.socket is the socket passed to prep_accept, aka the server socket.
+  uring.wait do |operation|
+    raise operation.errno if operation.errno
+    case operation.type
+    when :multishot_accept
+      puts "Remote Address: #{operation.to_tcpsocket.remote_address.inspect}"
+      puts "Socket        : #{operation.res}"
+      uring.prep_recv(operation.res)
+      #operation.res  is the accepted socket
+      #operation.socket is the socket passed to prep_accept, aka the server socket.
     when :recv
-      next if userdata.res == 0
-      ret = phr.parse_request(userdata.buf)
+      next if operation.res == 0
+      ret = phr.parse_request(operation.buf)
       case ret
       when :incomplete, :parser_error
-        uring.prep_close(userdata.socket)
+        uring.prep_close(operation.socket)
         phr.reset
         next
       when Integer
@@ -71,12 +70,12 @@ while true
         puts "HTTP Version  : 1.#{phr.minor_version}"
         puts "HTTP Path     : #{phr.path}"
         puts "HTTP Headers  : #{phr.headers.inspect}"
-        puts "HTTP Body     : #{userdata.buf.byteslice(ret..-1).inspect}"
+        puts "HTTP Body     : #{operation.buf.byteslice(ret..-1).inspect}"
       end
       phr.reset
-      uring.prep_send(userdata.socket, response)
+      uring.prep_send(operation.socket, response)
     when :send
-      uring.prep_close(userdata.socket)
+      uring.prep_close(operation.socket)
     end
   end
 end
