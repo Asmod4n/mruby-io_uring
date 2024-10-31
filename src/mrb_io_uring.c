@@ -367,7 +367,7 @@ mrb_io_uring_accept_operation_init(mrb_state *mrb, mrb_value self)
   mrb_data_init(self, operation, &mrb_io_uring_operation_type);
   *operation = ACCEPT;
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@type"), mrb_symbol_value(mrb_intern_lit(mrb, "accept")));
-  mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@socket"), sock);
+  mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@sock"), sock);
 
   return self;
 }
@@ -383,7 +383,7 @@ mrb_io_uring_multishot_accept_operation_init(mrb_state *mrb, mrb_value self)
   mrb_data_init(self, operation, &mrb_io_uring_operation_type);
   *operation = MULTISHOTACCEPT;
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@type"), mrb_symbol_value(mrb_intern_lit(mrb, "multishot_accept")));
-  mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@socket"), sock);
+  mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@sock"), sock);
 
   return self;
 }
@@ -420,7 +420,7 @@ mrb_io_uring_recv_operation_init(mrb_state *mrb, mrb_value self)
   *operation = RECV;
 
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@type"), mrb_symbol_value(mrb_intern_lit(mrb, "recv")));
-  mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@socket"), sock);
+  mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@sock"), sock);
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@buf"),  buf);
 
   return self;
@@ -438,7 +438,7 @@ mrb_io_uring_splice_operation_init(mrb_state *mrb, mrb_value self)
   *operation = SPLICE;
 
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@type"), mrb_symbol_value(mrb_intern_lit(mrb, "splice")));
-  mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@socket"), mrb_assoc_new(mrb, fd_in, fd_out));
+  mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@sock"), mrb_assoc_new(mrb, fd_in, fd_out));
 
   return self;
 }
@@ -455,7 +455,7 @@ mrb_io_uring_send_operation_init(mrb_state *mrb, mrb_value self)
   *operation = SEND;
 
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@type"), mrb_symbol_value(mrb_intern_lit(mrb, "send")));
-  mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@socket"), sock);
+  mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@sock"), sock);
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@buf"),  buf);
 
   return self;
@@ -473,7 +473,7 @@ mrb_io_uring_shutdown_operation_init(mrb_state *mrb, mrb_value self)
   *operation = SHUTDOWN;
 
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@type"), mrb_symbol_value(mrb_intern_lit(mrb, "shutdown")));
-  mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@socket"), sock);
+  mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@sock"), sock);
 
   return self;
 }
@@ -490,7 +490,7 @@ mrb_io_uring_close_operation_init(mrb_state *mrb, mrb_value self)
   *operation = CLOSE;
 
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@type"), mrb_symbol_value(mrb_intern_lit(mrb, "close")));
-  mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@socket"), sock);
+  mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@sock"), sock);
 
   return self;
 }
@@ -507,7 +507,7 @@ mrb_io_uring_poll_add_operation_init(mrb_state *mrb, mrb_value self)
   *operation = POLLADD;
 
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@type"), mrb_symbol_value(mrb_intern_lit(mrb, "poll_add")));
-  mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@socket"), sock);
+  mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@sock"), sock);
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@poll_mask"), poll_mask);
 
   return self;
@@ -525,7 +525,7 @@ mrb_io_uring_poll_multishot_operation_init(mrb_state *mrb, mrb_value self)
   *operation = POLLMULTISHOT;
 
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@type"), mrb_symbol_value(mrb_intern_lit(mrb, "poll_multishot")));
-  mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@socket"), sock);
+  mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@sock"), sock);
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@poll_mask"), poll_mask);
 
   return self;
@@ -543,7 +543,7 @@ mrb_io_uring_poll_update_operation_init(mrb_state *mrb, mrb_value self)
   *operation = POLLUPDATE;
 
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@type"),       mrb_symbol_value(mrb_intern_lit(mrb, "poll_update")));
-  mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@socket"),     mrb_iv_get(mrb, old_operation, mrb_intern_lit(mrb, "@socket")));
+  mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@sock"),     mrb_iv_get(mrb, old_operation, mrb_intern_lit(mrb, "@sock")));
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@poll_mask"),  poll_mask);
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@userdata"),   mrb_iv_get(mrb, old_operation, mrb_intern_lit(mrb, "@userdata")));
 
@@ -580,7 +580,7 @@ mrb_io_uring_process_cqe(mrb_state *mrb, struct io_uring_cqe *cqe)
   if (likely(cqe->res >= 0)) {
     switch(*operation_t) {
       case SOCKET:
-        mrb_iv_set(mrb, operation, mrb_intern_lit(mrb, "@socket"), res);
+        mrb_iv_set(mrb, operation, mrb_intern_lit(mrb, "@sock"), res);
       break;
       case RECV: {
         mrb_value buf = mrb_iv_get(mrb, operation, mrb_intern_lit(mrb, "@buf"));

@@ -22,7 +22,7 @@ while true
       ret = phr.parse_request(operation.buf)
       case ret
       when :incomplete, :parser_error
-        uring.prep_close(operation.socket)
+        uring.prep_close(operation.sock)
         phr.reset
         next
       when Integer
@@ -33,9 +33,9 @@ while true
         puts "HTTP Body     : #{operation.buf.byteslice(ret..-1).inspect}"
       end
       phr.reset
-      uring.prep_send(operation.socket, response)
+      uring.prep_send(operation.sock, response)
     when :send
-      uring.prep_close(operation.socket)
+      uring.prep_close(operation.sock)
     end
   end
 end
