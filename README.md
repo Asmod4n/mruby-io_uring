@@ -4,7 +4,7 @@ io_uring for mruby (WIP)
 
 Requirements
 ============
-This requires at least Linux 5.6
+This requires at least Linux 5.19
 
 Installation
 ============
@@ -21,16 +21,18 @@ Supported functions
 At the moment the following functions are implemented.
 ```c
 io_uring_queue_init
-io_uring_get_sqe
 io_uring_submit
 io_uring_prep_socket
 io_uring_prep_accept
+io_uring_prep_accept_multishot
 io_uring_prep_recv
 io_uring_prep_splice
 io_uring_prep_send
 io_uring_prep_shutdown
 io_uring_prep_close
 io_uring_prep_poll_add
+io_uring_prep_poll_multishot
+io_uring_prep_cancel
 io_uring_wait_cqe_timeout
 ```
 
@@ -85,13 +87,6 @@ uring.wait accepts a timeout as a float value, if a timeout occurs false is retu
 
 You can also use uring.wait without a block.
 It returns an array which you can then iterate over.
-
-Every instanced IO::Uring prep method accepts a sqe parameter as the last one, you can get a sqe by calling uring.sqe
-```ruby
-uring.prep_send(socket, response, 0, uring.sqe)
-```
-
-you can access a sqes flags by calling sqe.flags and sqe.flags=
 
 
 LICENSE

@@ -1,5 +1,5 @@
 body = "hallo\n"
-headers = "HTTP/1.1 200 OK\r\nConnection: keep-alive\r\nContent-Type: text/plain\r\nContent-Length: #{body.bytesize}\r\n\r\n"
+headers = "HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Type: text/plain\r\nContent-Length: #{body.bytesize}\r\n\r\n"
 response = "#{headers}#{body}"
 uring = IO::Uring.new
 server = TCPServer.new(12345)
