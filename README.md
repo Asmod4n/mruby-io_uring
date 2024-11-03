@@ -58,13 +58,13 @@ while true
       puts "Socket        : #{operation.res}"
       uring.prep_recv(operation.res)
       #operation.res  is the accepted socket
-      #operation.socket is the socket passed to prep_accept, aka the server socket.
+      #operation.sock is the socket passed to prep_accept, aka the server socket.
     when :recv
       next if operation.res == 0
       ret = phr.parse_request(operation.buf)
       case ret
       when :incomplete, :parser_error
-        uring.prep_close(operation.socket)
+        uring.prep_close(operation.sock)
         phr.reset
         next
       when Integer
@@ -75,9 +75,9 @@ while true
         puts "HTTP Body     : #{operation.buf.byteslice(ret..-1).inspect}"
       end
       phr.reset
-      uring.prep_send(operation.socket, response)
+      uring.prep_send(operation.sock, response)
     when :send
-      uring.prep_close(operation.socket)
+      uring.prep_close(operation.sock)
     end
   end
 end

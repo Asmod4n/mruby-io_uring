@@ -10,7 +10,7 @@ mrb_io_uring_queue_init(mrb_state *mrb, mrb_value self)
   mrb_int entries = 2048, flags = 0;
   mrb_get_args(mrb, "|ii", &entries, &flags);
 
-  int ret = io_uring_queue_init(entries, ring, flags);
+  int ret = io_uring_queue_init((unsigned int) entries, ring, (unsigned int) flags);
   if (likely(ret == 0)) {
     mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "sqes"), mrb_hash_new_capa(mrb, entries));
     return self;
@@ -543,7 +543,7 @@ mrb_io_uring_poll_update_operation_init(mrb_state *mrb, mrb_value self)
   *operation = POLLUPDATE;
 
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@type"),       mrb_symbol_value(mrb_intern_lit(mrb, "poll_update")));
-  mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@sock"),     mrb_iv_get(mrb, old_operation, mrb_intern_lit(mrb, "@sock")));
+  mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@sock"),       mrb_iv_get(mrb, old_operation, mrb_intern_lit(mrb, "@sock")));
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@poll_mask"),  poll_mask);
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@userdata"),   mrb_iv_get(mrb, old_operation, mrb_intern_lit(mrb, "@userdata")));
 
