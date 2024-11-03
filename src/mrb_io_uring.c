@@ -696,7 +696,7 @@ mrb_uring_readable(mrb_state *mrb, mrb_value self)
   mrb_value res = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "@res"));
   if (likely(mrb_integer_p(res)))
     return mrb_bool_value(mrb_integer(res) & POLLIN);
-  return mrb_false_value();
+  return mrb_nil_value();
 }
 
 static mrb_value
@@ -705,7 +705,7 @@ mrb_uring_writable(mrb_state *mrb, mrb_value self)
   mrb_value res = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "@res"));
   if (likely(mrb_integer_p(res)))
     return mrb_bool_value(mrb_integer(res) & POLLOUT);
-  return mrb_false_value();
+  return mrb_nil_value();
 }
 
 void
