@@ -109,13 +109,203 @@ mrb_io_uring_buffer_return(mrb_state *mrb, mrb_value self)
   return self;
 }
 
+static __u64
+mrb_io_uring_parse_flags_string(mrb_state *mrb, const char *flags_str) {
+  __u64 flags = 0;
+  int seen_plus = 0;
+
+  while (*flags_str) {
+    if (*flags_str == '+') {
+      if (seen_plus) {
+        mrb_raise(mrb, E_ARGUMENT_ERROR, "'+' must be at the end with no characters following, and only once");
+      }
+      seen_plus = 1;
+    } else if (seen_plus) {
+      mrb_raise(mrb, E_ARGUMENT_ERROR, "'+' must be at the end with no characters following");
+    }
+
+    switch (*flags_str++) {
+      case 'r':
+        if (flags & O_RDONLY) {
+          mrb_raise(mrb, E_ARGUMENT_ERROR, "flag 'r' specified more than once");
+        }
+        flags |= O_RDONLY;
+        break;
+      case 'w':
+        if (flags & O_WRONLY) {
+          mrb_raise(mrb, E_ARGUMENT_ERROR, "flag 'w' specified more than once");
+        }
+        flags |= O_WRONLY | O_CREAT | O_TRUNC;
+        break;
+      case 'a':
+        if (flags & O_APPEND) {
+          mrb_raise(mrb, E_ARGUMENT_ERROR, "flag 'a' specified more than once");
+        }
+        flags |= O_WRONLY | O_CREAT | O_APPEND;
+        break;
+      case '+':
+        flags = (flags & ~O_ACCMODE) | O_RDWR;
+        break;
+      case 'e':
+        if (flags & O_CLOEXEC) {
+          mrb_raise(mrb, E_ARGUMENT_ERROR, "flag 'e' specified more than once");
+        }
+        flags |= O_CLOEXEC;
+        break;
+      case 's':
+        if (flags & O_SYNC) {
+          mrb_raise(mrb, E_ARGUMENT_ERROR, "flag 's' specified more than once");
+        }
+        flags |= O_SYNC;
+        break;
+      case 'd':
+        if (flags & O_DIRECT) {
+          mrb_raise(mrb, E_ARGUMENT_ERROR, "flag 'd' specified more than once");
+        }
+        flags |= O_DIRECT;
+        break;
+      case 't':
+        if (flags & O_TMPFILE) {
+          mrb_raise(mrb, E_ARGUMENT_ERROR, "flag 't' specified more than once");
+        }
+        flags |= O_TMPFILE;
+        break;
+      case 'f':
+        if (flags & O_NOFOLLOW) {
+          mrb_raise(mrb, E_ARGUMENT_ERROR, "flag 'f' specified more than once");
+        }
+        flags |= O_NOFOLLOW;
+        break;
+      case 'n':
+        switch (*flags_str++) {
+          case 'a':
+            if (flags & O_NOATIME) {
+              mrb_raise(mrb, E_ARGUMENT_ERROR, "flag 'na' specified more than once");
+            }
+            flags |= O_NOATIME;
+            break;
+          case 'c':
+            if (flags & O_NOCTTY) {
+              mrb_raise(mrb, E_ARGUMENT_ERROR, "flag 'nc' specified more than once");
+            }
+            flags |= O_NOCTTY;
+            break;
+          case 'f':
+            if (flags & O_NOFOLLOW) {
+              mrb_raise(mrb, E_ARGUMENT_ERROR, "flag 'nf' specified more than once");
+            }
+            flags |= O_NOFOLLOW;
+            break;
+          case 'b':
+            if (flags & O_NONBLOCK) {
+              mrb_raise(mrb, E_ARGUMENT_ERROR, "flag 'nb' specified more than once");
+            }
+            flags |= O_NONBLOCK;
+            break;
+          default:
+            mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid flags string");
+        }
+        break;
+      case 'c':
+        if (flags & O_CREAT) {
+          mrb_raise(mrb, E_ARGUMENT_ERROR, "flag 'c' specified more than once");
+        }
+        flags |= O_CREAT;
+        break;
+      case 'x':
+        if (flags & O_EXCL) {
+          mrb_raise(mrb, E_ARGUMENT_ERROR, "flag 'x' specified more than once");
+        }
+        flags |= O_EXCL;
+        break;
+      case 'D':
+        if (flags & O_DIRECTORY) {
+          mrb_raise(mrb, E_ARGUMENT_ERROR, "flag 'D' specified more than once");
+        }
+        flags |= O_DIRECTORY;
+        break;
+      case 'P':
+        if (flags & O_PATH) {
+          mrb_raise(mrb, E_ARGUMENT_ERROR, "flag 'P' specified more than once");
+        }
+        flags |= O_PATH;
+        break;
+      case 'l':
+        if (flags & O_LARGEFILE) {
+          mrb_raise(mrb, E_ARGUMENT_ERROR, "flag 'l' specified more than once");
+        }
+        flags |= O_LARGEFILE;
+        break;
+      default:
+        mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid flags string");
+    }
+  }
+
+  // Final validation:
+  if (((flags & O_WRONLY) && (flags & O_RDWR)) || !(flags & (O_RDONLY | O_WRONLY | O_RDWR))) {
+    mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid combination of flags");
+  }
+
+  return flags;
+}
+
+static __u64
+mrb_io_uring_parse_resolve_string(mrb_state *mrb, const char *resolve_str) {
+  __u64 resolve_flags = 0;
+
+  while (*resolve_str) {
+    switch (*resolve_str++) {
+      case 'L':
+        if (resolve_flags & RESOLVE_NO_SYMLINKS) {
+          mrb_raise(mrb, E_ARGUMENT_ERROR, "flag 'L' specified more than once");
+        }
+        resolve_flags |= RESOLVE_NO_SYMLINKS;
+        break;
+      case 'X':
+        if (resolve_flags & RESOLVE_NO_XDEV) {
+          mrb_raise(mrb, E_ARGUMENT_ERROR, "flag 'X' specified more than once");
+        }
+        resolve_flags |= RESOLVE_NO_XDEV;
+        break;
+      case 'C':
+        if (resolve_flags & RESOLVE_CACHED) {
+          mrb_raise(mrb, E_ARGUMENT_ERROR, "flag 'C' specified more than once");
+        }
+        resolve_flags |= RESOLVE_CACHED;
+        break;
+      case 'B':
+        if (resolve_flags & RESOLVE_BENEATH) {
+          mrb_raise(mrb, E_ARGUMENT_ERROR, "flag 'B' specified more than once");
+        }
+        resolve_flags |= RESOLVE_BENEATH;
+        break;
+      case 'R':
+        if (resolve_flags & RESOLVE_IN_ROOT) {
+          mrb_raise(mrb, E_ARGUMENT_ERROR, "flag 'R' specified more than once");
+        }
+        resolve_flags |= RESOLVE_IN_ROOT;
+        break;
+      default:
+        mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid resolve string");
+    }
+  }
+
+  return resolve_flags;
+}
+
 static mrb_value
 mrb_io_uring_open_how_init(mrb_state *mrb, mrb_value self)
 {
   struct open_how *how = mrb_realloc(mrb, DATA_PTR(self), sizeof(*how));
-  memset(how, '\0', sizeof(*how));
   mrb_data_init(self, how, &mrb_io_uring_open_how_type);
+  const char *flags;
+  mrb_int mode;
+  const char *resolve;
+  mrb_get_args(mrb, "ziz", &flags, &mode, &resolve);
 
+  how->flags = mrb_io_uring_parse_flags_string(mrb, flags);
+  how->mode = mode;
+  how->resolve = mrb_io_uring_parse_resolve_string(mrb, resolve);
   return self;
 }
 
