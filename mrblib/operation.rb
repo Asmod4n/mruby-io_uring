@@ -1,5 +1,5 @@
 class IO::Uring::Operation
-  attr_reader :ring, :type, :sock, :fileno, :buf, :res, :flags, :errno, :poll_mask, :operation
+  attr_reader :ring, :type, :sock, :fileno, :buf, :res, :flags, :errno, :poll_mask, :path, :directory_fileno, :open_how, :operation
   attr_accessor :userdata
 
   def buffer?
