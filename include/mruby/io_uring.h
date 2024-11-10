@@ -10,6 +10,7 @@ MRB_BEGIN_DECL
 
 #define E_IO_URING_ERROR (mrb_class_get_under(mrb, mrb_class_get_under(mrb, mrb_class_get(mrb, "IO"), "Uring"), "Error"))
 #define E_IO_URING_SQ_RING_FULL_ERROR (mrb_class_get_under(mrb, mrb_class_get_under(mrb, mrb_class_get(mrb, "IO"), "Uring"), "SQRingFullError"))
+#define E_IO_URING_NO_BUFFERS_ERROR (mrb_class_get_under(mrb, mrb_class_get_under(mrb, mrb_class_get(mrb, "IO"), "Uring"), "NoBuffersError"))
 
 MRB_END_DECL
 

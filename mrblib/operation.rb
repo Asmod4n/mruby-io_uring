@@ -1,5 +1,5 @@
 class IO::Uring::Operation
-  attr_reader :ring, :type, :sock, :buf, :res, :flags, :errno, :poll_mask, :operation
+  attr_reader :ring, :type, :sock, :fileno, :buf, :res, :flags, :errno, :poll_mask, :operation
   attr_accessor :userdata
 
   def buffer?
@@ -43,9 +43,9 @@ class IO::Uring::Operation
     ring.prep_splice(fd_in, off_in, fd_out, off_out, nbytes, splice_flags, sqe_flags)
   end
 
-  def send(sock, flags = 0, sqe_flags = 0)
+  def send(sock, buf, flags = 0, sqe_flags = 0)
     sqe_flags |= SQE_IO_LINK
-    ring.prep_send(sock, flags, sqe_flags)
+    ring.prep_send(sock, buf, flags, sqe_flags)
   end
 
   def shutdown(sock, how, sqe_flags = 0)
