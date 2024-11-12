@@ -410,6 +410,7 @@ mrb_io_uring_prep_recv(mrb_state *mrb, mrb_value self)
   }
 
   mrb_value buf = mrb_str_new_capa(mrb, len);
+  mrb_obj_freeze(mrb, buf);
   struct io_uring_sqe *sqe = mrb_io_uring_get_sqe(mrb, self);
   mrb_value argv[] = { self, sock, buf };
   mrb_value operation = mrb_obj_new(mrb, mrb_class_get_under(mrb, mrb_class(mrb, self), "_RecvOp"), NELEMS(argv), argv);
@@ -456,6 +457,7 @@ mrb_io_uring_prep_send(mrb_state *mrb, mrb_value self)
   mrb_int flags = 0, sqe_flags = 0;
   mrb_get_args(mrb, "oS|ii", &sock, &buf, &flags, &sqe_flags);
 
+  mrb_obj_freeze(mrb, buf);
   mrb_value argv[] = { self, sock, buf };
   mrb_value operation = mrb_obj_new(mrb, mrb_class_get_under(mrb, mrb_class(mrb, self), "_SendOp"), NELEMS(argv), argv);
   struct io_uring_sqe *sqe = mrb_io_uring_get_sqe(mrb, self);
@@ -608,6 +610,7 @@ mrb_io_uring_prep_read(mrb_state *mrb, mrb_value self)
   mrb_get_args(mrb, "o|iii", &fileno, &nbytes, &offset, &sqe_flags);
   
   mrb_value buf = mrb_str_new_capa(mrb, nbytes);
+  mrb_obj_freeze(mrb, buf);
   mrb_value argv[] = { self, fileno, buf };
   mrb_value operation = mrb_obj_new(mrb, mrb_class_get_under(mrb, mrb_class(mrb, self), "_ReadOp"), NELEMS(argv), argv);
   struct io_uring_sqe *sqe = mrb_io_uring_get_sqe(mrb, self);
@@ -660,6 +663,7 @@ mrb_io_uring_prep_write(mrb_state *mrb, mrb_value self)
   mrb_int offset, sqe_flags = 0;
   mrb_get_args(mrb, "oSi|i", &fileno, &buf, &offset, &sqe_flags);
 
+  mrb_obj_freeze(mrb, buf);
   mrb_value argv[] = { self, fileno, buf };
   mrb_value operation = mrb_obj_new(mrb, mrb_class_get_under(mrb, mrb_class(mrb, self), "_WriteOp"), NELEMS(argv), argv);
   struct io_uring_sqe *sqe = mrb_io_uring_get_sqe(mrb, self);
@@ -1070,6 +1074,15 @@ mrb_io_uring_process_cqe(mrb_state *mrb, struct io_uring_cqe *cqe)
           MRB_UNSET_FROZEN_FLAG(mrb_obj_ptr(buf));
           mrb_str_resize(mrb, buf, cqe->res);
           if (*operation_t == READFIXED) mrb_obj_freeze(mrb, buf);
+        } else {
+          mrb_raise(mrb, E_TYPE_ERROR, "buf is not a string");
+        }
+      } break;
+      case SEND:
+      case WRITE: {
+        mrb_value buf = mrb_iv_get(mrb, operation, mrb_intern_lit(mrb, "@buf"));
+        if (likely(mrb_string_p(buf))) {
+          MRB_UNSET_FROZEN_FLAG(mrb_obj_ptr(buf));
         } else {
           mrb_raise(mrb, E_TYPE_ERROR, "buf is not a string");
         }
