@@ -652,6 +652,29 @@ mrb_io_uring_prep_read_fixed(mrb_state *mrb, mrb_value ring)
 }
 
 static mrb_value
+mrb_io_uring_prep_write(mrb_state *mrb, mrb_value self)
+{
+  mrb_value fileno, buf;
+  mrb_int offset, sqe_flags = 0;
+  mrb_get_args(mrb, "oSi|i", &fileno, &buf, &offset, &sqe_flags);
+
+  mrb_value argv[] = { self, fileno, buf };
+  mrb_value operation = mrb_obj_new(mrb, mrb_class_get_under(mrb, mrb_class(mrb, self), "_WriteOp"), NELEMS(argv), argv);
+  struct io_uring_sqe *sqe = mrb_io_uring_get_sqe(mrb, self);
+  io_uring_sqe_set_data(sqe, mrb_ptr(operation));
+
+  io_uring_prep_write(sqe,
+  (int) mrb_integer(mrb_convert_type(mrb, fileno, MRB_TT_INTEGER, "Integer", "fileno")),
+  RSTRING_PTR(buf), RSTRING_LEN(buf),
+  (__u64) offset);
+  io_uring_sqe_set_flags(sqe, (unsigned int) sqe_flags);
+
+  mrb_hash_set(mrb, mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "sqes")), operation, operation);
+
+  return operation;
+}
+
+static mrb_value
 mrb_io_uring_prep_cancel(mrb_state *mrb, mrb_value self)
 {
   mrb_value operation;
@@ -920,6 +943,35 @@ mrb_io_uring_poll_update_operation_init(mrb_state *mrb, mrb_value self)
 }
 
 static mrb_value
+mrb_io_uring_openat2_operation_init(mrb_state *mrb, mrb_value self)
+{
+  mrb_value ring_val, path_str, directory_fileno, open_how;
+  mrb_get_args(mrb, "oooo", &ring_val, &path_str, &directory_fileno, &open_how);
+  mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@ring"), ring_val);
+
+  enum mrb_io_uring_op_types *operation_p = mrb_realloc(mrb, DATA_PTR(self), sizeof(*operation_p));
+  mrb_data_init(self, operation_p, &mrb_io_uring_operation_type);
+  *operation_p = OPENAT2;
+
+  mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@type"), mrb_symbol_value(mrb_intern_lit(mrb, "openat2")));
+  mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@path"), path_str);
+  mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@directory_fileno"), directory_fileno);
+  mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@open_how"), open_how);
+
+  return self;
+}
+
+static mrb_value
+mrb_io_uring_openat2_to_file(mrb_state *mrb, mrb_value self)
+{
+  mrb_value res = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "@res"));
+  mrb_value file = mrb_obj_new(mrb, mrb_class_get(mrb, "File"), 1, &res);
+  (void) mrb_io_fileno(mrb, file);
+  ((struct mrb_io *)DATA_PTR(file))->close_fd = 0;
+  return file;
+}
+
+static mrb_value
 mrb_io_uring_read_operation_init(mrb_state *mrb, mrb_value self)
 {
   mrb_value ring_val, fileno, buf;
@@ -956,32 +1008,21 @@ mrb_io_uring_read_fixed_operation_init(mrb_state *mrb, mrb_value self)
 }
 
 static mrb_value
-mrb_io_uring_openat2_operation_init(mrb_state *mrb, mrb_value self)
+mrb_io_uring_write_operation_init(mrb_state *mrb, mrb_value self)
 {
-  mrb_value ring_val, path_str, directory_fileno, open_how;
-  mrb_get_args(mrb, "oooo", &ring_val, &path_str, &directory_fileno, &open_how);
+  mrb_value ring_val, fileno, buf;
+  mrb_get_args(mrb, "ooo", &ring_val, &fileno, &buf);
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@ring"), ring_val);
 
-  enum mrb_io_uring_op_types *operation_p = mrb_realloc(mrb, DATA_PTR(self), sizeof(*operation_p));
-  mrb_data_init(self, operation_p, &mrb_io_uring_operation_type);
-  *operation_p = OPENAT2;
+  enum mrb_io_uring_op_types *operation = mrb_realloc(mrb, DATA_PTR(self), sizeof(*operation));
+  mrb_data_init(self, operation, &mrb_io_uring_operation_type);
+  *operation = WRITE;
 
-  mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@type"), mrb_symbol_value(mrb_intern_lit(mrb, "openat2")));
-  mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@path"), path_str);
-  mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@directory_fileno"), directory_fileno);
-  mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@open_how"), open_how);
+  mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@type"), mrb_symbol_value(mrb_intern_lit(mrb, "write")));
+  mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@fileno"), fileno);
+  mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@buf"),  buf);
 
   return self;
-}
-
-static mrb_value
-mrb_io_uring_openat2_to_file(mrb_state *mrb, mrb_value self)
-{
-  mrb_value res = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "@res"));
-  mrb_value file = mrb_obj_new(mrb, mrb_class_get(mrb, "File"), 1, &res);
-  (void) mrb_io_fileno(mrb, file);
-  ((struct mrb_io *)DATA_PTR(file))->close_fd = 0;
-  return file;
 }
 
 static mrb_value
@@ -1175,9 +1216,10 @@ mrb_mruby_io_uring_gem_init(mrb_state* mrb)
   mrb_define_method(mrb, io_uring_class, "prep_poll_add",           mrb_io_uring_prep_poll_add,           MRB_ARGS_ARG(1, 2));
   mrb_define_method(mrb, io_uring_class, "prep_poll_multishot",     mrb_io_uring_prep_poll_multishot,     MRB_ARGS_ARG(1, 2));
   mrb_define_method(mrb, io_uring_class, "prep_poll_update",        mrb_io_uring_prep_poll_update,        MRB_ARGS_ARG(3, 1));
+  mrb_define_method(mrb, io_uring_class, "prep_openat2",            mrb_io_uring_prep_openat2,            MRB_ARGS_ARG(1, 3));
   mrb_define_method(mrb, io_uring_class, "prep_read",               mrb_io_uring_prep_read,               MRB_ARGS_ARG(1, 3));
   mrb_define_method(mrb, io_uring_class, "prep_read_fixed",         mrb_io_uring_prep_read_fixed,         MRB_ARGS_ARG(1, 2));
-  mrb_define_method(mrb, io_uring_class, "prep_openat2",            mrb_io_uring_prep_openat2,            MRB_ARGS_ARG(1, 3));
+  mrb_define_method(mrb, io_uring_class, "prep_write",  	          mrb_io_uring_prep_write,              MRB_ARGS_ARG(3, 1));
   mrb_define_method(mrb, io_uring_class, "prep_cancel",  	          mrb_io_uring_prep_cancel,             MRB_ARGS_ARG(1, 2));
   mrb_define_method(mrb, io_uring_class, "wait",  	                mrb_io_uring_wait_cqe_timeout,        MRB_ARGS_OPT(1));
   mrb_define_method(mrb, io_uring_class, "buffer_return",  	        mrb_io_uring_buffer_return,           MRB_ARGS_REQ(1));
@@ -1262,15 +1304,18 @@ mrb_mruby_io_uring_gem_init(mrb_state* mrb)
   mrb_define_method(mrb, io_uring_poll_update_operation_class, "readable?",  mrb_uring_readable, MRB_ARGS_NONE());
   mrb_define_method(mrb, io_uring_poll_update_operation_class, "writable?",  mrb_uring_writable, MRB_ARGS_NONE());
 
+  io_uring_openat2_operation_class = mrb_define_class_under(mrb, io_uring_class, "_OpenAt2Op", io_uring_op_class);
+  mrb_define_method(mrb, io_uring_openat2_operation_class, "initialize",  mrb_io_uring_openat2_operation_init, MRB_ARGS_REQ(4));
+  mrb_define_method(mrb, io_uring_openat2_operation_class, "to_file",     mrb_io_uring_openat2_to_file,        MRB_ARGS_NONE());
+
   io_uring_read_operation_class = mrb_define_class_under(mrb, io_uring_class, "_ReadOp", io_uring_op_class);
   mrb_define_method(mrb, io_uring_read_operation_class, "initialize", mrb_io_uring_read_operation_init, MRB_ARGS_REQ(3));
 
   io_uring_read_fixed_operation_class = mrb_define_class_under(mrb, io_uring_class, "_ReadFixedOp", io_uring_op_class);
   mrb_define_method(mrb, io_uring_read_fixed_operation_class, "initialize", mrb_io_uring_read_fixed_operation_init, MRB_ARGS_REQ(3));
 
-  io_uring_openat2_operation_class = mrb_define_class_under(mrb, io_uring_class, "_OpenAt2Op", io_uring_op_class);
-  mrb_define_method(mrb, io_uring_openat2_operation_class, "initialize",  mrb_io_uring_openat2_operation_init, MRB_ARGS_REQ(4));
-  mrb_define_method(mrb, io_uring_openat2_operation_class, "to_file",     mrb_io_uring_openat2_to_file,        MRB_ARGS_NONE());
+  io_uring_write_operation_class = mrb_define_class_under(mrb, io_uring_class, "_WriteOp", io_uring_op_class);
+  mrb_define_method(mrb, io_uring_write_operation_class, "initialize", mrb_io_uring_write_operation_init, MRB_ARGS_REQ(3));
 
   io_uring_cancel_operation_class = mrb_define_class_under(mrb, io_uring_class, "_CancelOp", io_uring_op_class);
   mrb_define_method(mrb, io_uring_cancel_operation_class, "initialize", mrb_io_uring_cancel_operation_init, MRB_ARGS_REQ(2));
