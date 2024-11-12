@@ -88,6 +88,38 @@ uring.wait accepts a timeout as a float value, if a timeout occurs false is retu
 You can also use uring.wait without a block.
 It returns an array which you can then iterate over.
 
+API Docs
+========
+
+IO::Uring::OpenHow.new(flags, mode, resolve)
+
+### Supported Flags
+
+- `r`: `O_RDONLY` (read-only)
+- `w`: `O_WRONLY | O_CREAT | O_TRUNC` (write-only, create file if not exists, truncate if exists)
+- `a`: `O_WRONLY | O_CREAT | O_APPEND` (append, create file if not exists)
+- `+`: `O_RDWR` (read and write, must follow `r`, `w`, or `a`)
+- `e`: `O_CLOEXEC` (close file descriptor on exec)
+- `s`: `O_SYNC` (synchronize)
+- `d`: `O_DIRECT` (direct access)
+- `t`: `O_TMPFILE` (temporary file)
+- `na`: `O_NOATIME` (do not update access time)
+- `nc`: `O_NOCTTY` (do not assign controlling terminal)
+- `nf`: `O_NOFOLLOW` (do not follow symbolic links)
+- `nb`: `O_NONBLOCK` (non-blocking)
+- `x`: `O_EXCL` (error if file exists)
+- `D`: `O_DIRECTORY` (must be a directory)
+- `P`: `O_PATH` (resolve pathname, do not open file)
+- `l`: `O_LARGEFILE` (large file support)
+
+### Supported Resolve
+
+- `L`: `RESOLVE_NO_SYMLINKS` (do not follow symbolic links)
+- `X`: `RESOLVE_NO_XDEV` (do not resolve across filesystem boundaries)
+- `C`: `RESOLVE_CACHED` (use cached resolution)
+- `B`: `RESOLVE_BENEATH` (resolve only beneath the directory)
+- `R`: `RESOLVE_IN_ROOT` (perform resolution in root directory)
+
 
 LICENSE
 =======

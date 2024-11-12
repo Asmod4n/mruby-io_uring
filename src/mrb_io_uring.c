@@ -8,7 +8,7 @@ mrb_io_uring_queue_init(mrb_state *mrb, mrb_value self)
   mrb_data_init(self, ring, &mrb_io_uring_queue_type);
 
   mrb_int entries = 2048, flags = 0;
-  mrb_get_args(mrb, "|ii", &entries, &flags);
+  mrb_get_args(mrb, "|iii", &entries, &flags);
   if (unlikely(entries <= 0)) {
     mrb_raise(mrb, E_ARGUMENT_ERROR, "too few entries");
   }
@@ -70,9 +70,15 @@ mrb_io_uring_buffer_get(mrb_state *mrb, mrb_value self)
 {
   mrb_io_uring_buffers_t *buffers_t = DATA_PTR(self);
 
+  if (unlikely(!mrb_array_p(buffers_t->free_list))) {
+    mrb_raise(mrb, E_TYPE_ERROR, "free_list is not an array");
+  }
+
   if (RARRAY_LEN(buffers_t->free_list) > 0) {
     mrb_value index_val = mrb_ary_pop(mrb, buffers_t->free_list);
-    return mrb_assoc_new(mrb, index_val, mrb_obj_value((void *) buffers_t->tags[mrb_as_int(mrb, index_val)]));
+    mrb_int index = mrb_as_int(mrb, index_val);
+    if (unlikely(index < 0 || index >= buffers_t->max_buffers)) mrb_raise(mrb, E_RANGE_ERROR, "index out of bounds");
+    return mrb_assoc_new(mrb, index_val, mrb_obj_value((void *) buffers_t->tags[index]));
   }
 
   if (buffers_t->allocated_buffers < buffers_t->max_buffers) {
@@ -102,6 +108,9 @@ mrb_io_uring_buffer_return(mrb_state *mrb, mrb_value self)
   mrb_get_args(mrb, "S", &buffer);
 
   mrb_io_uring_buffers_t *buffers_t = DATA_PTR(self);
+  if (unlikely(!mrb_array_p(buffers_t->free_list))) {
+    mrb_raise(mrb, E_TYPE_ERROR, "free_list is not an array");
+  }
   mrb_value index = mrb_ensure_int_type(mrb, mrb_hash_get(mrb, mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "buffers")), buffer));
   mrb_ary_push(mrb, buffers_t->free_list, index);
   mrb_str_resize(mrb, buffer, MRB_IORING_BUFFER_SIZE);
@@ -110,40 +119,53 @@ mrb_io_uring_buffer_return(mrb_state *mrb, mrb_value self)
 }
 
 static __u64
-mrb_io_uring_parse_flags_string(mrb_state *mrb, const char *flags_str) {
+mrb_io_uring_parse_flags_string(mrb_state *mrb, const char *flags_str)
+{
+  if (!flags_str) {
+    return 0;
+  }
   __u64 flags = 0;
-  int seen_plus = 0;
+  mrb_bool seen_plus = FALSE;
+  mrb_bool read_mode = FALSE;
+  mrb_bool write_mode = FALSE;
+  mrb_bool append_mode = FALSE;
 
   while (*flags_str) {
     if (*flags_str == '+') {
       if (seen_plus) {
         mrb_raise(mrb, E_ARGUMENT_ERROR, "'+' must be at the end with no characters following, and only once");
       }
-      seen_plus = 1;
+      seen_plus = TRUE;
     } else if (seen_plus) {
       mrb_raise(mrb, E_ARGUMENT_ERROR, "'+' must be at the end with no characters following");
     }
 
     switch (*flags_str++) {
       case 'r':
-        if (flags & O_RDONLY) {
-          mrb_raise(mrb, E_ARGUMENT_ERROR, "flag 'r' specified more than once");
+        if (read_mode || write_mode || append_mode) {
+          mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid combination of flags");
         }
+        read_mode = TRUE;
         flags |= O_RDONLY;
         break;
       case 'w':
-        if (flags & O_WRONLY) {
-          mrb_raise(mrb, E_ARGUMENT_ERROR, "flag 'w' specified more than once");
+        if (read_mode || write_mode || append_mode) {
+          mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid combination of flags");
         }
+        write_mode = TRUE;
         flags |= O_WRONLY | O_CREAT | O_TRUNC;
         break;
       case 'a':
-        if (flags & O_APPEND) {
-          mrb_raise(mrb, E_ARGUMENT_ERROR, "flag 'a' specified more than once");
+        if (read_mode || write_mode || append_mode) {
+          mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid combination of flags");
         }
+        append_mode = TRUE;
         flags |= O_WRONLY | O_CREAT | O_APPEND;
         break;
       case '+':
+        if (!(read_mode || write_mode || append_mode)) {
+          mrb_raise(mrb, E_ARGUMENT_ERROR, "'+' must follow 'r', 'w', or 'a'");
+        }
         flags = (flags & ~O_ACCMODE) | O_RDWR;
         break;
       case 'e':
@@ -169,12 +191,6 @@ mrb_io_uring_parse_flags_string(mrb_state *mrb, const char *flags_str) {
           mrb_raise(mrb, E_ARGUMENT_ERROR, "flag 't' specified more than once");
         }
         flags |= O_TMPFILE;
-        break;
-      case 'f':
-        if (flags & O_NOFOLLOW) {
-          mrb_raise(mrb, E_ARGUMENT_ERROR, "flag 'f' specified more than once");
-        }
-        flags |= O_NOFOLLOW;
         break;
       case 'n':
         switch (*flags_str++) {
@@ -205,18 +221,6 @@ mrb_io_uring_parse_flags_string(mrb_state *mrb, const char *flags_str) {
           default:
             mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid flags string");
         }
-        break;
-      case 'c':
-        if (flags & O_CREAT) {
-          mrb_raise(mrb, E_ARGUMENT_ERROR, "flag 'c' specified more than once");
-        }
-        flags |= O_CREAT;
-        break;
-      case 'x':
-        if (flags & O_EXCL) {
-          mrb_raise(mrb, E_ARGUMENT_ERROR, "flag 'x' specified more than once");
-        }
-        flags |= O_EXCL;
         break;
       case 'D':
         if (flags & O_DIRECTORY) {
@@ -250,7 +254,11 @@ mrb_io_uring_parse_flags_string(mrb_state *mrb, const char *flags_str) {
 }
 
 static __u64
-mrb_io_uring_parse_resolve_string(mrb_state *mrb, const char *resolve_str) {
+mrb_io_uring_parse_resolve_string(mrb_state *mrb, const char *resolve_str)
+{
+  if (!resolve_str) {
+    return 0;
+  }
   __u64 resolve_flags = 0;
 
   while (*resolve_str) {
@@ -298,14 +306,15 @@ mrb_io_uring_open_how_init(mrb_state *mrb, mrb_value self)
 {
   struct open_how *how = mrb_realloc(mrb, DATA_PTR(self), sizeof(*how));
   mrb_data_init(self, how, &mrb_io_uring_open_how_type);
-  const char *flags;
-  mrb_int mode;
-  const char *resolve;
-  mrb_get_args(mrb, "ziz", &flags, &mode, &resolve);
+  const char *flags = NULL;
+  mrb_int mode = 0;
+  const char *resolve = NULL;
+  mrb_get_args(mrb, "|z!iz!", &flags, &mode, &resolve);
 
   how->flags = mrb_io_uring_parse_flags_string(mrb, flags);
   how->mode = mode;
   how->resolve = mrb_io_uring_parse_resolve_string(mrb, resolve);
+
   return self;
 }
 
@@ -636,6 +645,7 @@ mrb_io_uring_prep_read_fixed(mrb_state *mrb, mrb_value ring)
 
   mrb_io_uring_buffers_t *buffers_t = DATA_PTR(buffers);
   mrb_int index = mrb_as_int(mrb, mrb_ary_ref(mrb, buffer, 0));
+  if (unlikely(index < 0 || index >= buffers_t->max_buffers)) mrb_raise(mrb, E_RANGE_ERROR, "index out of bounds");
   mrb_value buf = mrb_ary_ref(mrb, buffer, 1);
   mrb_value argv[] = { ring, fileno, buf };
   mrb_value operation = mrb_obj_new(mrb, mrb_class_get_under(mrb, mrb_class(mrb, ring), "_ReadFixedOp"), NELEMS(argv), argv);
@@ -1196,6 +1206,7 @@ mrb_mruby_io_uring_gem_init(mrb_state* mrb)
   mrb_define_const (mrb, io_uring_class, "SHUT_RD", mrb_fixnum_value(SHUT_RD));
   mrb_define_const (mrb, io_uring_class, "SHUT_WR", mrb_fixnum_value(SHUT_WR));
   mrb_define_const (mrb, io_uring_class, "SHUT_RDWR", mrb_fixnum_value(SHUT_RDWR));
+  mrb_define_const (mrb, io_uring_class, "AT_FDCWD", mrb_fixnum_value(AT_FDCWD));
 
   io_uring_error_class = mrb_define_class_under(mrb, io_uring_class, "Error", E_RUNTIME_ERROR);
   mrb_define_class_under(mrb, io_uring_class, "SQRingFullError",    io_uring_error_class);
@@ -1207,7 +1218,7 @@ mrb_mruby_io_uring_gem_init(mrb_state* mrb)
 
   io_uring_open_how_class = mrb_define_class_under(mrb, io_uring_class, "OpenHow", mrb->object_class);
   MRB_SET_INSTANCE_TT(io_uring_open_how_class, MRB_TT_CDATA);
-  mrb_define_method(mrb, io_uring_open_how_class, "initialize", mrb_io_uring_open_how_init, MRB_ARGS_REQ(1));
+  mrb_define_method(mrb, io_uring_open_how_class, "initialize", mrb_io_uring_open_how_init, MRB_ARGS_OPT(3));
 
   io_uring_op_class = mrb_define_class_under(mrb, io_uring_class, "Operation", mrb->object_class);
   MRB_SET_INSTANCE_TT(io_uring_op_class, MRB_TT_CDATA);
