@@ -78,7 +78,7 @@ mrb_io_uring_buffer_get(mrb_state *mrb, mrb_value self)
   if (buffers_t->allocated_buffers < buffers_t->max_buffers) {
     mrb_value buffer = mrb_str_new_capa(mrb, MRB_IORING_BUFFER_SIZE);
     buffers_t->iovecs[buffers_t->allocated_buffers].iov_base = RSTRING_PTR(buffer);
-    buffers_t->iovecs[buffers_t->allocated_buffers].iov_len = MRB_IORING_BUFFER_SIZE;
+    buffers_t->iovecs[buffers_t->allocated_buffers].iov_len = RSTRING_CAPA(buffer);
     buffers_t->tags[buffers_t->allocated_buffers] = (uintptr_t) mrb_cptr(buffer);
     int ret = io_uring_register_buffers_update_tag(buffers_t->ring, buffers_t->allocated_buffers, buffers_t->iovecs, buffers_t->tags, 1);
     if (likely(ret == 1)) {
@@ -104,7 +104,9 @@ mrb_io_uring_buffer_return(mrb_state *mrb, mrb_value self)
   mrb_io_uring_buffers_t *buffers_t = DATA_PTR(self);
   mrb_value index = mrb_ensure_int_type(mrb, mrb_hash_get(mrb, mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "buffers")), buffer));
   mrb_ary_push(mrb, buffers_t->free_list, index);
+  MRB_UNSET_FROZEN_FLAG(mrb_obj_ptr(buffer));
   mrb_str_resize(mrb, buffer, MRB_IORING_BUFFER_SIZE);
+  mrb_obj_freeze(mrb, buffer);
 
   return self;
 }
@@ -633,17 +635,17 @@ mrb_io_uring_prep_read_fixed(mrb_state *mrb, mrb_value ring)
   if (unlikely(mrb_nil_p(buffer))) {
     mrb_raise(mrb, E_IO_URING_NO_BUFFERS_ERROR, "All fixed buffers are in use, you have to return them with ring.buffer_return(operation.buf) after you are done using them.");
   }
-
   mrb_io_uring_buffers_t *buffers_t = DATA_PTR(buffers);
   mrb_int index = mrb_as_int(mrb, mrb_ary_ref(mrb, buffer, 0));
   mrb_value buf = mrb_ary_ref(mrb, buffer, 1);
+  mrb_obj_freeze(mrb, buf);
   mrb_value argv[] = { ring, fileno, buf };
   mrb_value operation = mrb_obj_new(mrb, mrb_class_get_under(mrb, mrb_class(mrb, ring), "_ReadFixedOp"), NELEMS(argv), argv);
   struct io_uring_sqe *sqe = mrb_io_uring_get_sqe(mrb, ring);
   io_uring_sqe_set_data(sqe, mrb_ptr(operation));
   io_uring_prep_read_fixed(sqe,
   fd,
-  buffers_t->iovecs[index].iov_base, MRB_IORING_BUFFER_SIZE,
+  buffers_t->iovecs[index].iov_base, RSTRING_CAPA(buf),
   (unsigned long long) offset, index);
   io_uring_sqe_set_flags(sqe, (unsigned int) sqe_flags);
   mrb_hash_set(mrb, mrb_iv_get(mrb, ring, mrb_intern_lit(mrb, "sqes")), operation, operation);
@@ -1065,7 +1067,9 @@ mrb_io_uring_process_cqe(mrb_state *mrb, struct io_uring_cqe *cqe)
       case READFIXED: {
         mrb_value buf = mrb_iv_get(mrb, operation, mrb_intern_lit(mrb, "@buf"));
         if (likely(mrb_string_p(buf))) {
+          MRB_UNSET_FROZEN_FLAG(mrb_obj_ptr(buf));
           mrb_str_resize(mrb, buf, cqe->res);
+          if (*operation_t == READFIXED) mrb_obj_freeze(mrb, buf);
         } else {
           mrb_raise(mrb, E_TYPE_ERROR, "buf is not a string");
         }
@@ -1199,7 +1203,8 @@ mrb_mruby_io_uring_gem_init(mrb_state* mrb)
   *io_uring_close_operation_class, *io_uring_poll_add_operation_class,
   *io_uring_poll_multishot_operation_class, *io_uring_poll_update_operation_class,
   *io_uring_read_operation_class, *io_uring_read_fixed_operation_class,
-  *io_uring_cancel_operation_class, *io_uring_open_how_class, *io_uring_openat2_operation_class;
+  *io_uring_cancel_operation_class, *io_uring_open_how_class, *io_uring_openat2_operation_class,
+  *io_uring_write_operation_class;
 
   io_uring_class = mrb_define_class_under(mrb, mrb_class_get(mrb, "IO"), "Uring", mrb->object_class);
   MRB_SET_INSTANCE_TT(io_uring_class, MRB_TT_CDATA);
