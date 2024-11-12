@@ -7,7 +7,6 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
-#include <linux/openat2.h>
 #include <liburing.h>
 #include <mruby.h>
 #include <mruby/data.h>
