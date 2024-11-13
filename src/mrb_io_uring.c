@@ -8,7 +8,7 @@ mrb_io_uring_queue_init(mrb_state *mrb, mrb_value self)
   mrb_data_init(self, ring, &mrb_io_uring_queue_type);
 
   mrb_int entries = 2048, flags = 0;
-  mrb_get_args(mrb, "|iii", &entries, &flags);
+  mrb_get_args(mrb, "|ii", &entries, &flags);
   if (unlikely(entries <= 0)) {
     mrb_raise(mrb, E_ARGUMENT_ERROR, "too few entries");
   }
@@ -314,7 +314,7 @@ mrb_io_uring_open_how_init(mrb_state *mrb, mrb_value self)
   mrb_get_args(mrb, "|z!iz!", &flags, &mode, &resolve);
 
   how->flags = mrb_io_uring_parse_flags_string(mrb, flags);
-  how->mode = mode;
+  how->mode = (unsigned long long) mode;
   how->resolve = mrb_io_uring_parse_resolve_string(mrb, resolve);
 
   return self;

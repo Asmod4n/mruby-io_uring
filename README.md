@@ -8,8 +8,9 @@ This requires at least Linux 5.19
 
 Installation
 ============
+The gem is called mruby-io-uring for adding it to your project.
+Since there are numerous versions of liburing around we are shipping a version which is compatible with this gem.
 
-You have to install liburing with development headers first. Then add
 ```ruby
 conf.gem mgem: 'mruby-io-uring'
 ```
@@ -32,6 +33,10 @@ io_uring_prep_shutdown
 io_uring_prep_close
 io_uring_prep_poll_add
 io_uring_prep_poll_multishot
+io_uring_prep_openat2
+io_uring_prep_read
+io_uring_prep_read_fixed
+io_uring_prep_write
 io_uring_prep_cancel
 io_uring_wait_cqe_timeout
 ```
@@ -91,7 +96,7 @@ It returns an array which you can then iterate over.
 API Docs
 ========
 
-IO::Uring::OpenHow.new(flags, mode, resolve)
+IO::Uring::OpenHow.new(flags = nil, mode = 0, resolve = nil)
 
 ### Supported Flags
 
