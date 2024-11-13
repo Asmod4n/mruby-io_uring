@@ -605,6 +605,7 @@ mrb_io_uring_prep_openat2(mrb_state *mrb, mrb_value self)
   struct io_uring_sqe *sqe = mrb_io_uring_get_sqe(mrb, self);
   io_uring_sqe_set_data(sqe, mrb_ptr(operation));
   io_uring_prep_openat2(sqe, dfd, mrb_string_value_cstr(mrb, &path_str), how);
+  mrb_obj_freeze(mrb, path_str);
   io_uring_sqe_set_flags(sqe, (unsigned int) sqe_flags);
   mrb_hash_set(mrb, mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "sqes")), operation, operation);
 
@@ -1073,9 +1074,11 @@ mrb_io_uring_process_cqe(mrb_state *mrb, struct io_uring_cqe *cqe)
       case SOCKET:
         mrb_iv_set(mrb, operation, mrb_intern_lit(mrb, "@sock"), res);
       break;
-      case OPENAT2:
+      case OPENAT2: {
         mrb_iv_set(mrb, operation, mrb_intern_lit(mrb, "@fileno"), res);
-      break;
+        mrb_value path = mrb_iv_get(mrb, operation, mrb_intern_lit(mrb, "@path"));
+        MRB_UNSET_FROZEN_FLAG(mrb_obj_ptr(path));
+      } break;
       case RECV:
       case READ:
       case READFIXED: {
