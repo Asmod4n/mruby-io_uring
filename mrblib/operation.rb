@@ -77,4 +77,10 @@ class IO::Uring::Operation
     sqe_flags |= SQE_IO_LINK
     ring.prep_cancel(operation, flags, sqe_flags)
   end
+
+  def inspect
+    instance_variables.map do |var|
+      "#{var}=#{instance_variable_get(var).inspect}"
+    end.join(", ").prepend("#<#{self.class}: ")
+  end
 end
