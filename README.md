@@ -115,7 +115,6 @@ IO::Uring::OpenHow.new(flags = nil, mode = 0, resolve = nil)
 - `x`: `O_EXCL` (error if file exists)
 - `D`: `O_DIRECTORY` (must be a directory)
 - `P`: `O_PATH` (resolve pathname, do not open file)
-- `l`: `O_LARGEFILE` (large file support)
 
 ### Supported Resolve
 

@@ -70,7 +70,7 @@ static const struct mrb_data_type mrb_io_uring_open_how_type = {
   "$i_mrb_io_uring_open_how_type", mrb_free
 };
 
-#define MRB_IORING_BUFFER_SIZE 131072
+#define MRB_IORING_DEFAULT_BUFFER_SIZE 131072
 
 typedef struct {
   struct io_uring *ring;
@@ -79,6 +79,7 @@ typedef struct {
   mrb_value free_list;
   mrb_int allocated_buffers;
   mrb_int max_buffers;
+  mrb_int buffer_size;
 } mrb_io_uring_buffers_t;
 
 static void

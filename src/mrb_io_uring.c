@@ -7,8 +7,8 @@ mrb_io_uring_queue_init(mrb_state *mrb, mrb_value self)
   memset(ring, '\0', sizeof(*ring));
   mrb_data_init(self, ring, &mrb_io_uring_queue_type);
 
-  mrb_int entries = 2048, flags = 0;
-  mrb_get_args(mrb, "|ii", &entries, &flags);
+  mrb_int entries = 2048, flags = 0, buffer_size = MRB_IORING_DEFAULT_BUFFER_SIZE;
+  mrb_get_args(mrb, "|iii", &entries, &flags, &buffer_size);
   if (unlikely(entries <= 0)) {
     mrb_raise(mrb, E_ARGUMENT_ERROR, "too few entries");
   }
@@ -16,16 +16,11 @@ mrb_io_uring_queue_init(mrb_state *mrb, mrb_value self)
   int ret = io_uring_queue_init((unsigned int) entries, ring, (unsigned int) flags);
   if (likely(ret == 0)) {
     mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "sqes"), mrb_hash_new_capa(mrb, entries));
-    mrb_value buffers = mrb_obj_new(mrb, mrb_class_get_under(mrb, mrb_class(mrb, self), "_Buffers"), 1, &self);
+    mrb_value argv[] = { self, mrb_int_value(mrb, buffer_size) };
+    mrb_value buffers = mrb_obj_new(mrb, mrb_class_get_under(mrb, mrb_class(mrb, self), "_Buffers"), NELEMS(argv), argv);
     mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "buffers"), buffers);
-    mrb_io_uring_buffers_t *buffers_t = DATA_PTR(buffers);
-    ret = io_uring_register_buffers_sparse(ring, (unsigned int) buffers_t->max_buffers);
-    if (likely(ret == 0)) {
-      return self;
-    } else {
-      errno = -ret;
-      mrb_sys_fail(mrb, "io_uring_register_buffers_sparse");   
-    }
+
+    return self;
   } else {
     errno = -ret;
     mrb_sys_fail(mrb, "io_uring_queue_init");
@@ -36,7 +31,11 @@ static mrb_value
 mrb_io_uring_buffers_init(mrb_state *mrb, mrb_value self)
 {
   struct io_uring *ring;
-  mrb_get_args(mrb, "d", &ring, &mrb_io_uring_queue_type);
+  mrb_int buffer_size = MRB_IORING_DEFAULT_BUFFER_SIZE;
+  mrb_get_args(mrb, "d|i", &ring, &mrb_io_uring_queue_type, &buffer_size);
+  if (unlikely(buffer_size <= 0 || buffer_size >= 1073741824)) {
+    mrb_raise(mrb, E_RANGE_ERROR, "buffer_size is out of bounds (min 1, max 1073741823 )");
+  }
 
   struct rlimit limit;
   if (unlikely(getrlimit(RLIMIT_MEMLOCK, &limit)) == -1) {
@@ -47,7 +46,7 @@ mrb_io_uring_buffers_init(mrb_state *mrb, mrb_value self)
     mrb_sys_fail(mrb, "setrlimit");
   }
 
-  mrb_int max_buffers = limit.rlim_cur / MRB_IORING_BUFFER_SIZE;
+  mrb_int max_buffers = limit.rlim_cur / buffer_size;
   mrb_value buffers = mrb_hash_new_capa(mrb, max_buffers);
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "buffers"), buffers);
 
@@ -61,8 +60,15 @@ mrb_io_uring_buffers_init(mrb_state *mrb, mrb_value self)
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "free_list"), buffers_t->free_list);
   buffers_t->allocated_buffers = 0;
   buffers_t->max_buffers = max_buffers;
+  buffers_t->buffer_size = buffer_size;
+  int ret = io_uring_register_buffers_sparse(ring, (unsigned int) buffers_t->max_buffers);
 
-  return self;
+  if (likely(ret == 0)) {
+    return self;
+  } else {
+    errno = -ret;
+    mrb_sys_fail(mrb, "io_uring_register_buffers_sparse");   
+  }
 }
 
 static mrb_value
@@ -82,7 +88,8 @@ mrb_io_uring_buffer_get(mrb_state *mrb, mrb_value self)
   }
 
   if (buffers_t->allocated_buffers < buffers_t->max_buffers) {
-    mrb_value buffer = mrb_str_new_capa(mrb, MRB_IORING_BUFFER_SIZE);
+    mrb_value buffer = mrb_str_new_capa(mrb, buffers_t->buffer_size);
+    mrb_obj_freeze(mrb, buffer);
     buffers_t->iovecs[buffers_t->allocated_buffers].iov_base = RSTRING_PTR(buffer);
     buffers_t->iovecs[buffers_t->allocated_buffers].iov_len = RSTRING_CAPA(buffer);
     buffers_t->tags[buffers_t->allocated_buffers] = (uintptr_t) mrb_cptr(buffer);
@@ -114,7 +121,7 @@ mrb_io_uring_buffer_return(mrb_state *mrb, mrb_value self)
   mrb_value index = mrb_ensure_int_type(mrb, mrb_hash_get(mrb, mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "buffers")), buffer));
   mrb_ary_push(mrb, buffers_t->free_list, index);
   MRB_UNSET_FROZEN_FLAG(mrb_obj_ptr(buffer));
-  mrb_str_resize(mrb, buffer, MRB_IORING_BUFFER_SIZE);
+  mrb_str_resize(mrb, buffer, buffers_t->buffer_size);
   mrb_obj_freeze(mrb, buffer);
 
   return self;
@@ -124,7 +131,7 @@ static __u64
 mrb_io_uring_parse_flags_string(mrb_state *mrb, const char *flags_str)
 {
   if (!flags_str) {
-    return 0;
+    return O_RDONLY;
   }
   __u64 flags = 0;
   mrb_bool seen_plus = FALSE;
@@ -236,12 +243,6 @@ mrb_io_uring_parse_flags_string(mrb_state *mrb, const char *flags_str)
         }
         flags |= O_PATH;
         break;
-      case 'l':
-        if (flags & O_LARGEFILE) {
-          mrb_raise(mrb, E_ARGUMENT_ERROR, "flag 'l' specified more than once");
-        }
-        flags |= O_LARGEFILE;
-        break;
       default:
         mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid flags string");
     }
@@ -309,12 +310,16 @@ mrb_io_uring_open_how_init(mrb_state *mrb, mrb_value self)
   struct open_how *how = mrb_realloc(mrb, DATA_PTR(self), sizeof(*how));
   mrb_data_init(self, how, &mrb_io_uring_open_how_type);
   const char *flags = NULL;
-  mrb_int mode = 0;
+  mrb_int mode = -1;
   const char *resolve = NULL;
   mrb_get_args(mrb, "|z!iz!", &flags, &mode, &resolve);
 
   how->flags = mrb_io_uring_parse_flags_string(mrb, flags);
-  how->mode = (unsigned long long) mode;
+  if (mode == -1) {
+    how->mode = (how->flags & (O_CREAT | O_TMPFILE)) ? 0666 : 0;
+  } else {
+    how->mode = (unsigned long long) mode;
+  }
   how->resolve = mrb_io_uring_parse_resolve_string(mrb, resolve);
 
   return self;
@@ -605,6 +610,7 @@ mrb_io_uring_prep_openat2(mrb_state *mrb, mrb_value self)
   struct io_uring_sqe *sqe = mrb_io_uring_get_sqe(mrb, self);
   io_uring_sqe_set_data(sqe, mrb_ptr(operation));
   io_uring_prep_openat2(sqe, dfd, mrb_string_value_cstr(mrb, &path_str), how);
+  mrb_obj_freeze(mrb, path_str);
   io_uring_sqe_set_flags(sqe, (unsigned int) sqe_flags);
   mrb_hash_set(mrb, mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "sqes")), operation, operation);
 
@@ -615,9 +621,19 @@ static mrb_value
 mrb_io_uring_prep_read(mrb_state *mrb, mrb_value self)
 {
   mrb_value fileno;
-  mrb_int nbytes = 4096, offset = 0, sqe_flags = 0;
+  mrb_int nbytes = 0, offset = 0, sqe_flags = 0;
   mrb_get_args(mrb, "o|iii", &fileno, &nbytes, &offset, &sqe_flags);
-  
+  int filefd = (int) mrb_integer(mrb_convert_type(mrb, fileno, MRB_TT_INTEGER, "Integer", "fileno"));
+
+  if (nbytes <= 0) {
+    struct stat st;
+    if (likely(fstat(filefd, &st)) == 0) {
+        nbytes = st.st_size;
+    } else {
+      mrb_sys_fail(mrb, "fstat");
+    }
+  }
+
   mrb_value buf = mrb_str_new_capa(mrb, nbytes);
   mrb_obj_freeze(mrb, buf);
   mrb_value argv[] = { self, fileno, buf };
@@ -625,7 +641,7 @@ mrb_io_uring_prep_read(mrb_state *mrb, mrb_value self)
   struct io_uring_sqe *sqe = mrb_io_uring_get_sqe(mrb, self);
   io_uring_sqe_set_data(sqe, mrb_ptr(operation));
   io_uring_prep_read(sqe,
-  (int) mrb_integer(mrb_convert_type(mrb, fileno, MRB_TT_INTEGER, "Integer", "fileno")),
+  filefd,
   RSTRING_PTR(buf), RSTRING_CAPA(buf),
   (unsigned long long) offset);
   io_uring_sqe_set_flags(sqe, (unsigned int) sqe_flags);
@@ -651,6 +667,9 @@ mrb_io_uring_prep_read_fixed(mrb_state *mrb, mrb_value ring)
   mrb_int index = mrb_as_int(mrb, mrb_ary_ref(mrb, buffer, 0));
   if (unlikely(index < 0 || index >= buffers_t->max_buffers)) mrb_raise(mrb, E_RANGE_ERROR, "index out of bounds");
   mrb_value buf = mrb_ary_ref(mrb, buffer, 1);
+  if (unlikely(!mrb_string_p(buf))) {
+    mrb_raise(mrb, E_TYPE_ERROR, "buf is not a string");
+  }
   mrb_obj_freeze(mrb, buf);
   mrb_value argv[] = { ring, fileno, buf };
   mrb_value operation = mrb_obj_new(mrb, mrb_class_get_under(mrb, mrb_class(mrb, ring), "_ReadFixedOp"), NELEMS(argv), argv);
@@ -1073,9 +1092,11 @@ mrb_io_uring_process_cqe(mrb_state *mrb, struct io_uring_cqe *cqe)
       case SOCKET:
         mrb_iv_set(mrb, operation, mrb_intern_lit(mrb, "@sock"), res);
       break;
-      case OPENAT2:
+      case OPENAT2: {
         mrb_iv_set(mrb, operation, mrb_intern_lit(mrb, "@fileno"), res);
-      break;
+        mrb_value path = mrb_iv_get(mrb, operation, mrb_intern_lit(mrb, "@path"));
+        MRB_UNSET_FROZEN_FLAG(mrb_obj_ptr(path));
+      } break;
       case RECV:
       case READ:
       case READFIXED: {
@@ -1274,7 +1295,7 @@ mrb_mruby_io_uring_gem_init(mrb_state* mrb)
 
   io_uring_buffers_class = mrb_define_class_under(mrb, io_uring_class, "_Buffers", mrb->object_class);
   MRB_SET_INSTANCE_TT(io_uring_buffers_class, MRB_TT_CDATA);
-  mrb_define_method(mrb, io_uring_buffers_class, "initialize", mrb_io_uring_buffers_init, MRB_ARGS_REQ(1));
+  mrb_define_method(mrb, io_uring_buffers_class, "initialize", mrb_io_uring_buffers_init, MRB_ARGS_ARG(1, 1));
 
   io_uring_open_how_class = mrb_define_class_under(mrb, io_uring_class, "OpenHow", mrb->object_class);
   MRB_SET_INSTANCE_TT(io_uring_open_how_class, MRB_TT_CDATA);
