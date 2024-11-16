@@ -3,7 +3,7 @@ assert('io') do
     ring.prep_openat2('file.txt', File.open(File.expand_path(File.dirname(__FILE__))))
 
     ring.wait do |operation|
-        ring.prep_read(operation.fileno)
+        ring.prep_read(operation.file)
     end
 
     ring.wait do |operation|
