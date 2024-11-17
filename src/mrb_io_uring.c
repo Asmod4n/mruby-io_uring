@@ -33,12 +33,12 @@ mrb_io_uring_queue_init_params(mrb_state *mrb, mrb_value self)
     ret = io_uring_queue_init_params((unsigned int) entries, &mrb_io_uring->ring, &mrb_io_uring->params);
   }
   if (likely(ret == 0)) {
+    mrb_io_uring->sqes = mrb_hash_new_capa(mrb, entries);
+    mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "sqes"), mrb_io_uring->sqes);
     if (can_use_buffers) {
       size_t max_buffers = limit.rlim_max / page_size;
       ret = io_uring_register_buffers_sparse(&mrb_io_uring->ring, max_buffers);
       if (likely(ret == 0)) {
-        mrb_io_uring->sqes = mrb_hash_new_capa(mrb, entries);
-        mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "sqes"), mrb_io_uring->sqes);
         mrb_io_uring->allocated_buffers = 0;
         mrb_io_uring->max_buffers = max_buffers;
         mrb_io_uring->total_used_buffer_memory = 0;
@@ -133,16 +133,6 @@ mrb_io_uring_buffer_return(mrb_state *mrb, mrb_value self)
   return self;
 }
 
-static struct io_uring_sqe *
-mrb_io_uring_get_sqe(mrb_state *mrb, struct io_uring *ring)
-{
-  struct io_uring_sqe *sqe = io_uring_get_sqe(ring);
-  if (unlikely(!sqe)) {
-    mrb_raise(mrb, E_IO_URING_SQ_RING_FULL_ERROR, "SQ ring is currently full and entries must be submitted for processing before new ones can get allocated");
-  }
-  return sqe;
-}
-
 static mrb_value
 mrb_io_uring_submit(mrb_state *mrb, mrb_value self)
 {
@@ -154,6 +144,16 @@ mrb_io_uring_submit(mrb_state *mrb, mrb_value self)
   }
 
   return mrb_int_value(mrb, ret);
+}
+
+static struct io_uring_sqe *
+mrb_io_uring_get_sqe(mrb_state *mrb, struct io_uring *ring)
+{
+  struct io_uring_sqe *sqe = io_uring_get_sqe(ring);
+  if (unlikely(!sqe)) {
+    mrb_raise(mrb, E_IO_URING_SQ_RING_FULL_ERROR, "SQ ring is currently full and entries must be submitted for processing before new ones can get allocated");
+  }
+  return sqe;
 }
 
 static mrb_value
@@ -764,9 +764,9 @@ mrb_io_uring_submit_and_wait_timeout(mrb_state *mrb, mrb_value self)
       .tv_sec  = timeout,
       .tv_nsec = (timeout - (mrb_int)(timeout)) * NSEC_PER_SEC
     };
-    rc = io_uring_submit_and_wait_timeout(&mrb_io_uring->ring, &cqe, wait_nr, &ts, NULL);
+    rc = io_uring_submit_and_wait_timeout(&mrb_io_uring->ring, &cqe, (unsigned) wait_nr, &ts, NULL);
   } else {
-    rc = io_uring_submit_and_wait_timeout(&mrb_io_uring->ring, &cqe, wait_nr, NULL, NULL);
+    rc = io_uring_submit_and_wait_timeout(&mrb_io_uring->ring, &cqe, (unsigned) wait_nr, NULL, NULL);
   }
 
   if (rc < 0) {
