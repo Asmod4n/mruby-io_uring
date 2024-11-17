@@ -4,7 +4,7 @@ io_uring for mruby (WIP)
 
 Requirements
 ============
-This requires at least Linux 5.19
+This is only working with a linux kernel.
 
 Installation
 ============
@@ -21,7 +21,7 @@ Supported functions
 
 At the moment the following functions are implemented.
 ```c
-io_uring_queue_init
+io_uring_queue_init_params
 io_uring_submit
 io_uring_prep_socket
 io_uring_prep_accept
@@ -38,7 +38,7 @@ io_uring_prep_read
 io_uring_prep_read_fixed
 io_uring_prep_write
 io_uring_prep_cancel
-io_uring_wait_cqe_timeout
+io_uring_submit_and_wait_timeout
 ```
 
 Here is an example on how to use them (requires mruby-phr for http parsing)

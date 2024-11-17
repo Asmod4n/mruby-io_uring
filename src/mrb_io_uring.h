@@ -1,12 +1,5 @@
 #define _GNU_SOURCE
 #define _LARGEFILE64_SOURCE
-#include <sys/resource.h>
-#include <netinet/in.h>
-#include <netdb.h>
-#include <string.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <fcntl.h>
 #include <liburing.h>
 #include <mruby.h>
 #include <mruby/data.h>
@@ -18,16 +11,14 @@
 #include <mruby/array.h>
 #include <mruby/io_uring.h>
 #include <mruby/proc.h>
-#include <sys/time.h>
-#include <stdlib.h>
 #include <mruby/ext/io.h>
+#include <stdlib.h>
+#include <sys/resource.h>
 #include <sys/poll.h>
 #include <mruby/throw.h>
-#include <pthread.h>
+#include <stdatomic.h>
 #include <math.h>
-#include <stdlib.h>
-#include <unistd.h>
-#include <stdio.h>
+#include <pthread.h>
 
 #ifndef NSEC_PER_SEC
 #define NSEC_PER_SEC 1000000000
@@ -54,18 +45,22 @@ enum mrb_io_uring_op_types {
   READ,
   READFIXED,
   WRITE,
-  CANCEL
+  CANCEL,
+  LAST_TYPE = CANCEL
 };
 
 typedef struct {
   struct io_uring ring;
+  struct io_uring_params params;
+  mrb_value sqes;
   size_t allocated_buffers;
   size_t max_buffers;
-  size_t total_memory;
+  size_t total_used_buffer_memory;
   size_t memlock_limit;
   struct iovec *iovecs;
   unsigned long long *tags;
   mrb_int *calculated_sizes;
+  mrb_value buffers;
   mrb_value free_list;
 } mrb_io_uring_t;
 
@@ -77,11 +72,11 @@ typedef struct {
 static void
 mrb_io_uring_queue_exit_gc(mrb_state *mrb, void *p)
 {
-  mrb_io_uring_t *mrb_io_ring = (mrb_io_uring_t *) p;
-  io_uring_queue_exit(&mrb_io_ring->ring);
-  mrb_free(mrb, mrb_io_ring->iovecs);
-  mrb_free(mrb, mrb_io_ring->tags);
-  mrb_free(mrb, mrb_io_ring->calculated_sizes);
+  mrb_io_uring_t *mrb_io_uring = (mrb_io_uring_t *) p;
+  io_uring_queue_exit(&mrb_io_uring->ring);
+  mrb_free(mrb, mrb_io_uring->iovecs);
+  mrb_free(mrb, mrb_io_uring->tags);
+  mrb_free(mrb, mrb_io_uring->calculated_sizes);
   mrb_free(mrb, p);
 }
 static const struct mrb_data_type mrb_io_uring_queue_type = {
@@ -98,9 +93,11 @@ static const struct mrb_data_type mrb_io_uring_open_how_type = {
 
 #define MRB_IORING_DEFAULT_FIXED_BUFFER_SIZE 131072
 #define MAX_BUFFER_SIZE (1 << 30) // Taken from the io_uring man pages: registered buffers musn't be larger than 1 GB.
+#define MAX(a, b) ((a) > (b) ? (a) : (b))
+#define MIN(a, b) ((a) < (b) ? (a) : (b))
 
-static size_t *precomputed_bins = NULL;
 static long page_size;
-static pthread_once_t init_once = PTHREAD_ONCE_INIT;
-static pthread_once_t deinit_once = PTHREAD_ONCE_INIT;
-static atomic_int gem_load_count = 0;
+static size_t *precomputed_bins = NULL;
+static size_t gem_load_count = 0;
+static pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+static mrb_bool can_use_buffers = FALSE;
