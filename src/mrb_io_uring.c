@@ -52,7 +52,7 @@ mrb_io_uring_queue_init_params(mrb_state *mrb, mrb_value self)
         mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "free_list"), mrb_io_uring->free_list);
       } else {
         errno = -ret;
-        mrb_sys_fail(mrb, "io_uring_register_buffers_sparse");      
+        mrb_sys_fail(mrb, "io_uring_register_buffers_sparse");
       }
     }
     return self;
@@ -129,212 +129,6 @@ mrb_io_uring_buffer_return(mrb_state *mrb, mrb_value self)
   } else {
     mrb_hash_set(mrb, mrb_io_uring->free_list, size_bin, mrb_ary_new_from_values(mrb, 1, &index_val));
   }
-
-  return self;
-}
-
-static __u64
-mrb_io_uring_parse_flags_string(mrb_state *mrb, mrb_value flags_val)
-{
-  if (mrb_nil_p(flags_val)) {
-    return 0;
-  }
-  const char *flags_str = mrb_string_value_cstr(mrb, &flags_val);
-
-  __u64 flags = 0;
-  mrb_bool seen_plus = FALSE;
-  mrb_bool read_mode = FALSE;
-  mrb_bool write_mode = FALSE;
-  mrb_bool append_mode = FALSE;
-
-  while (*flags_str) {
-    if (*flags_str == '+') {
-      if (unlikely(seen_plus)) {
-        mrb_raise(mrb, E_ARGUMENT_ERROR, "'+' must be at the end with no characters following, and only once");
-      }
-      seen_plus = TRUE;
-    } else if (unlikely(seen_plus)) {
-      mrb_raise(mrb, E_ARGUMENT_ERROR, "'+' must be at the end with no characters following");
-    }
-
-    switch (*flags_str++) {
-      case 'r':
-        if (unlikely(read_mode || write_mode || append_mode)) {
-          mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid combination of flags");
-        }
-        read_mode = TRUE;
-        flags |= O_RDONLY;
-        break;
-      case 'w':
-        if (unlikely(read_mode || write_mode || append_mode)) {
-          mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid combination of flags");
-        }
-        write_mode = TRUE;
-        flags |= O_WRONLY | O_CREAT | O_TRUNC;
-        break;
-      case 'a':
-        if (unlikely(read_mode || write_mode || append_mode)) {
-          mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid combination of flags");
-        }
-        append_mode = TRUE;
-        flags |= O_WRONLY | O_CREAT | O_APPEND;
-        break;
-      case '+':
-        if (unlikely(!(read_mode || write_mode || append_mode))) {
-          mrb_raise(mrb, E_ARGUMENT_ERROR, "'+' must follow 'r', 'w', or 'a'");
-        }
-        flags = (flags & ~O_ACCMODE) | O_RDWR;
-        break;
-      case 'e':
-        if (unlikely(flags & O_CLOEXEC)) {
-          mrb_raise(mrb, E_ARGUMENT_ERROR, "flag 'e' specified more than once");
-        }
-        flags |= O_CLOEXEC;
-        break;
-      case 's':
-        if (unlikely(flags & O_SYNC)) {
-          mrb_raise(mrb, E_ARGUMENT_ERROR, "flag 's' specified more than once");
-        }
-        flags |= O_SYNC;
-        break;
-      case 'd':
-        if (unlikely(flags & O_DIRECT)) {
-          mrb_raise(mrb, E_ARGUMENT_ERROR, "flag 'd' specified more than once");
-        }
-        flags |= O_DIRECT;
-        break;
-      case 't':
-        if (unlikely(flags & O_TMPFILE)) {
-          mrb_raise(mrb, E_ARGUMENT_ERROR, "flag 't' specified more than once");
-        }
-        flags |= O_TMPFILE;
-        break;
-      case 'n':
-        switch (*flags_str++) {
-          case 'a':
-            if (unlikely(flags & O_NOATIME)) {
-              mrb_raise(mrb, E_ARGUMENT_ERROR, "flag 'na' specified more than once");
-            }
-            flags |= O_NOATIME;
-            break;
-          case 'c':
-            if (unlikely(flags & O_NOCTTY)) {
-              mrb_raise(mrb, E_ARGUMENT_ERROR, "flag 'nc' specified more than once");
-            }
-            flags |= O_NOCTTY;
-            break;
-          case 'f':
-            if (unlikely(flags & O_NOFOLLOW)) {
-              mrb_raise(mrb, E_ARGUMENT_ERROR, "flag 'nf' specified more than once");
-            }
-            flags |= O_NOFOLLOW;
-            break;
-          case 'b':
-            if (unlikely(flags & O_NONBLOCK)) {
-              mrb_raise(mrb, E_ARGUMENT_ERROR, "flag 'nb' specified more than once");
-            }
-            flags |= O_NONBLOCK;
-            break;
-          default:
-            mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid flags string");
-        }
-        break;
-      case 'D':
-        if (unlikely(flags & O_DIRECTORY)) {
-          mrb_raise(mrb, E_ARGUMENT_ERROR, "flag 'D' specified more than once");
-        }
-        flags |= O_DIRECTORY;
-        break;
-      case 'P':
-        if (unlikely(flags & O_PATH)) {
-          mrb_raise(mrb, E_ARGUMENT_ERROR, "flag 'P' specified more than once");
-        }
-        flags |= O_PATH;
-        break;
-      default:
-        mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid flags string");
-    }
-  }
-
-  // Final validation:
-  if (unlikely(((flags & O_WRONLY) && (flags & O_RDWR)) || !(flags & (O_RDONLY | O_WRONLY | O_RDWR)))) {
-    mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid combination of flags");
-  }
-
-  return flags;
-}
-
-static __u64
-mrb_io_uring_parse_resolve_string(mrb_state *mrb, mrb_value resolve)
-{
-  if (mrb_nil_p(resolve)) {
-    return 0;
-  }
-  const char *resolve_str = mrb_string_value_cstr(mrb, &resolve);
-
-  __u64 resolve_flags = 0;
-
-  while (*resolve_str) {
-    switch (*resolve_str++) {
-      case 'L':
-        if (unlikely(resolve_flags & RESOLVE_NO_SYMLINKS)) {
-          mrb_raise(mrb, E_ARGUMENT_ERROR, "flag 'L' specified more than once");
-        }
-        resolve_flags |= RESOLVE_NO_SYMLINKS;
-        break;
-      case 'X':
-        if (unlikely(resolve_flags & RESOLVE_NO_XDEV)) {
-          mrb_raise(mrb, E_ARGUMENT_ERROR, "flag 'X' specified more than once");
-        }
-        resolve_flags |= RESOLVE_NO_XDEV;
-        break;
-      case 'C':
-        if (unlikely(resolve_flags & RESOLVE_CACHED)) {
-          mrb_raise(mrb, E_ARGUMENT_ERROR, "flag 'C' specified more than once");
-        }
-        resolve_flags |= RESOLVE_CACHED;
-        break;
-      case 'B':
-        if (unlikely(resolve_flags & RESOLVE_BENEATH)) {
-          mrb_raise(mrb, E_ARGUMENT_ERROR, "flag 'B' specified more than once");
-        }
-        resolve_flags |= RESOLVE_BENEATH;
-        break;
-      case 'R':
-        if (unlikely(resolve_flags & RESOLVE_IN_ROOT)) {
-          mrb_raise(mrb, E_ARGUMENT_ERROR, "flag 'R' specified more than once");
-        }
-        resolve_flags |= RESOLVE_IN_ROOT;
-        break;
-      default:
-        mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid resolve string");
-    }
-  }
-
-  return resolve_flags;
-}
-
-static mrb_value
-mrb_io_uring_open_how_init(mrb_state *mrb, mrb_value self)
-{
-  mrb_value flags = mrb_nil_value(), resolve = mrb_nil_value();
-  mrb_int mode = -1;
-  mrb_get_args(mrb, "|S!iS!", &flags, &mode, &resolve);
-
-  struct open_how *how = mrb_realloc(mrb, DATA_PTR(self), sizeof(*how));
-  mrb_data_init(self, how, &mrb_io_uring_open_how_type);
-
-  how->flags = mrb_io_uring_parse_flags_string(mrb, flags);
-  if (mode == -1) {
-    how->mode = (how->flags & (O_CREAT | O_TMPFILE)) ? 0666 : 0;
-  } else {
-    how->mode = (unsigned long long) mode;
-  }
-  how->resolve = mrb_io_uring_parse_resolve_string(mrb, resolve);
-
-  mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@flags"),    flags);
-  mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@mode"),     mrb_int_value(mrb, mode));
-  mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@resolve"),  resolve);
 
   return self;
 }
@@ -848,110 +642,6 @@ mrb_io_uring_prep_cancel(mrb_state *mrb, mrb_value self)
 }
 
 static mrb_value
-mrb_io_uring_operation_class_init(mrb_state *mrb, mrb_value self)
-{
-  mrb_value *argv;
-  mrb_int argc;
-  mrb_get_args(mrb, "*", &argv, &argc);
-
-  if (unlikely(argc < 1 || argc % 2 == 0)) {
-    mrb_raise(mrb, E_ARGUMENT_ERROR, "expecting an odd number of arguments; operation type followed by key-value pairs");
-  }
-
-  mrb_int type = mrb_integer(argv[0]);
-  if (unlikely(type < 0 || type > LAST_TYPE)) {
-    mrb_raise(mrb, E_RANGE_ERROR, "type isn't enum mrb_io_uring_op_types");
-  }
-
-  enum mrb_io_uring_op_types *operation_type = mrb_realloc(mrb, DATA_PTR(self), sizeof(*operation_type));
-  mrb_data_init(self, operation_type, &mrb_io_uring_operation_type);
-  *operation_type = type;
-
-  for (mrb_int i = 1; i < argc; i += 2) {
-    mrb_value key = argv[i];
-    mrb_value value = argv[i + 1];
-
-    if (unlikely(!mrb_symbol_p(key))) {
-      mrb_raise(mrb, E_TYPE_ERROR, "expected symbol for key");
-    }
-
-    mrb_iv_set(mrb, self, mrb_symbol(key), value);
-  }
-
-  return self;
-}
-
-static mrb_value
-mrb_io_uring_operation_to_tcpserver(mrb_state *mrb, mrb_value self)
-{
-  mrb_value sock = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "@sock"));
-  mrb_value tcp_server = mrb_funcall(mrb, mrb_obj_value(mrb_class_get(mrb, "TCPServer")), "for_fd", 1, sock);
-  (void) mrb_io_fileno(mrb, tcp_server);
-  ((struct mrb_io *)DATA_PTR(tcp_server))->close_fd = 0;
-  return tcp_server;
-}
-
-static mrb_value
-mrb_io_uring_operation_to_udpsocket(mrb_state *mrb, mrb_value self)
-{
-  mrb_value sock = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "@sock"));
-  mrb_value udp_socket = mrb_funcall(mrb, mrb_obj_value(mrb_class_get(mrb, "UDPSocket")), "for_fd", 1, sock);
-  (void) mrb_io_fileno(mrb, udp_socket);
-  ((struct mrb_io *)DATA_PTR(udp_socket))->close_fd = 0;
-  return udp_socket;
-}
-
-static mrb_value
-mrb_io_uring_operation_to_socket(mrb_state *mrb, mrb_value self)
-{
-  mrb_value sock = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "@sock"));
-  sock = mrb_funcall(mrb, mrb_obj_value(mrb_class_get(mrb, "Socket")), "for_fd", 1, sock);
-  (void) mrb_io_fileno(mrb, sock);
-  ((struct mrb_io *)DATA_PTR(sock))->close_fd = 0;
-  return sock;
-}
-
-static mrb_value
-mrb_io_uring_operation_to_unixserver(mrb_state *mrb, mrb_value self)
-{
-  mrb_value sock = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "@sock"));
-  mrb_value unix_server = mrb_funcall(mrb, mrb_obj_value(mrb_class_get(mrb, "UNIXServer")), "for_fd", 1, sock);
-  (void) mrb_io_fileno(mrb, unix_server);
-  ((struct mrb_io *)DATA_PTR(unix_server))->close_fd = 0;
-  return unix_server;
-}
-
-static mrb_value
-mrb_io_uring_operation_to_tcpsocket(mrb_state *mrb, mrb_value self)
-{
-  mrb_value sock = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "@sock"));
-  mrb_value tcp_socket = mrb_funcall(mrb, mrb_obj_value(mrb_class_get(mrb, "TCPSocket")), "for_fd", 1, sock);
-  (void) mrb_io_fileno(mrb, tcp_socket);
-  ((struct mrb_io *)DATA_PTR(tcp_socket))->close_fd = 0;
-  return tcp_socket;
-}
-
-static mrb_value
-mrb_io_uring_operation_to_unixsocket(mrb_state *mrb, mrb_value self)
-{
-  mrb_value sock = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "@sock"));
-  mrb_value unix_socket = mrb_funcall(mrb, mrb_obj_value(mrb_class_get(mrb, "UNIXSocket")), "for_fd", 1, sock);
-  (void) mrb_io_fileno(mrb, unix_socket);
-  ((struct mrb_io *)DATA_PTR(unix_socket))->close_fd = 0;
-  return unix_socket;
-}
-
-static mrb_value
-mrb_io_uring_operation_to_file(mrb_state *mrb, mrb_value self)
-{
-  mrb_value file = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "@file"));
-  file = mrb_obj_new(mrb, mrb_class_get(mrb, "File"), 1, &file);
-  (void) mrb_io_fileno(mrb, file);
-  ((struct mrb_io *)DATA_PTR(file))->close_fd = 0;
-  return file;
-}
-
-static mrb_value
 mrb_io_uring_process_cqe(mrb_state *mrb, struct io_uring_cqe *cqe)
 {
   mrb_value operation = mrb_obj_value(io_uring_cqe_get_data(cqe));
@@ -995,7 +685,7 @@ mrb_io_uring_process_cqe(mrb_state *mrb, struct io_uring_cqe *cqe)
       } break;
       default:
       break;
-    }   
+    }
   } else {
     mrb_value errno_val = mrb_fixnum_value(-cqe->res);
     mrb_iv_set(mrb, operation, mrb_intern_lit(mrb, "@errno"), mrb_obj_new(mrb, mrb_class_get(mrb, "SystemCallError"), 1, &errno_val));
@@ -1087,7 +777,317 @@ mrb_io_uring_submit_and_wait_timeout(mrb_state *mrb, mrb_value self)
   }
 
   return mrb_io_uring_iterate_over_cqes(mrb, self, mrb_io_uring, block, cqe);
-} 
+}
+
+static __u64
+mrb_io_uring_parse_flags_string(mrb_state *mrb, mrb_value flags_val)
+{
+  if (mrb_nil_p(flags_val)) {
+    return 0;
+  }
+  const char *flags_str = mrb_string_value_cstr(mrb, &flags_val);
+
+  __u64 flags = 0;
+  mrb_bool seen_plus = FALSE;
+  mrb_bool read_mode = FALSE;
+  mrb_bool write_mode = FALSE;
+  mrb_bool append_mode = FALSE;
+
+  while (*flags_str) {
+    if (*flags_str == '+') {
+      if (unlikely(seen_plus)) {
+        mrb_raise(mrb, E_ARGUMENT_ERROR, "'+' must be at the end with no characters following, and only once");
+      }
+      seen_plus = TRUE;
+    } else if (unlikely(seen_plus)) {
+      mrb_raise(mrb, E_ARGUMENT_ERROR, "'+' must be at the end with no characters following");
+    }
+
+    switch (*flags_str++) {
+      case 'r':
+        if (unlikely(read_mode || write_mode || append_mode)) {
+          mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid combination of flags");
+        }
+        read_mode = TRUE;
+        flags |= O_RDONLY;
+        break;
+      case 'w':
+        if (unlikely(read_mode || write_mode || append_mode)) {
+          mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid combination of flags");
+        }
+        write_mode = TRUE;
+        flags |= O_WRONLY | O_CREAT | O_TRUNC;
+        break;
+      case 'a':
+        if (unlikely(read_mode || write_mode || append_mode)) {
+          mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid combination of flags");
+        }
+        append_mode = TRUE;
+        flags |= O_WRONLY | O_CREAT | O_APPEND;
+        break;
+      case '+':
+        if (unlikely(!(read_mode || write_mode || append_mode))) {
+          mrb_raise(mrb, E_ARGUMENT_ERROR, "'+' must follow 'r', 'w', or 'a'");
+        }
+        flags = (flags & ~O_ACCMODE) | O_RDWR;
+        break;
+      case 'e':
+        if (unlikely(flags & O_CLOEXEC)) {
+          mrb_raise(mrb, E_ARGUMENT_ERROR, "flag 'e' specified more than once");
+        }
+        flags |= O_CLOEXEC;
+        break;
+      case 's':
+        if (unlikely(flags & O_SYNC)) {
+          mrb_raise(mrb, E_ARGUMENT_ERROR, "flag 's' specified more than once");
+        }
+        flags |= O_SYNC;
+        break;
+      case 'd':
+        if (unlikely(flags & O_DIRECT)) {
+          mrb_raise(mrb, E_ARGUMENT_ERROR, "flag 'd' specified more than once");
+        }
+        flags |= O_DIRECT;
+        break;
+      case 't':
+        if (unlikely(flags & O_TMPFILE)) {
+          mrb_raise(mrb, E_ARGUMENT_ERROR, "flag 't' specified more than once");
+        }
+        flags |= O_TMPFILE;
+        break;
+      case 'n':
+        switch (*flags_str++) {
+          case 'a':
+            if (unlikely(flags & O_NOATIME)) {
+              mrb_raise(mrb, E_ARGUMENT_ERROR, "flag 'na' specified more than once");
+            }
+            flags |= O_NOATIME;
+            break;
+          case 'c':
+            if (unlikely(flags & O_NOCTTY)) {
+              mrb_raise(mrb, E_ARGUMENT_ERROR, "flag 'nc' specified more than once");
+            }
+            flags |= O_NOCTTY;
+            break;
+          case 'f':
+            if (unlikely(flags & O_NOFOLLOW)) {
+              mrb_raise(mrb, E_ARGUMENT_ERROR, "flag 'nf' specified more than once");
+            }
+            flags |= O_NOFOLLOW;
+            break;
+          case 'b':
+            if (unlikely(flags & O_NONBLOCK)) {
+              mrb_raise(mrb, E_ARGUMENT_ERROR, "flag 'nb' specified more than once");
+            }
+            flags |= O_NONBLOCK;
+            break;
+          default:
+            mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid flags string");
+        }
+        break;
+      case 'D':
+        if (unlikely(flags & O_DIRECTORY)) {
+          mrb_raise(mrb, E_ARGUMENT_ERROR, "flag 'D' specified more than once");
+        }
+        flags |= O_DIRECTORY;
+        break;
+      case 'P':
+        if (unlikely(flags & O_PATH)) {
+          mrb_raise(mrb, E_ARGUMENT_ERROR, "flag 'P' specified more than once");
+        }
+        flags |= O_PATH;
+        break;
+      default:
+        mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid flags string");
+    }
+  }
+
+  // Final validation:
+  if (unlikely(((flags & O_WRONLY) && (flags & O_RDWR)) || !(flags & (O_RDONLY | O_WRONLY | O_RDWR)))) {
+    mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid combination of flags");
+  }
+
+  return flags;
+}
+
+static __u64
+mrb_io_uring_parse_resolve_string(mrb_state *mrb, mrb_value resolve)
+{
+  if (mrb_nil_p(resolve)) {
+    return 0;
+  }
+  const char *resolve_str = mrb_string_value_cstr(mrb, &resolve);
+
+  __u64 resolve_flags = 0;
+
+  while (*resolve_str) {
+    switch (*resolve_str++) {
+      case 'L':
+        if (unlikely(resolve_flags & RESOLVE_NO_SYMLINKS)) {
+          mrb_raise(mrb, E_ARGUMENT_ERROR, "flag 'L' specified more than once");
+        }
+        resolve_flags |= RESOLVE_NO_SYMLINKS;
+        break;
+      case 'X':
+        if (unlikely(resolve_flags & RESOLVE_NO_XDEV)) {
+          mrb_raise(mrb, E_ARGUMENT_ERROR, "flag 'X' specified more than once");
+        }
+        resolve_flags |= RESOLVE_NO_XDEV;
+        break;
+      case 'C':
+        if (unlikely(resolve_flags & RESOLVE_CACHED)) {
+          mrb_raise(mrb, E_ARGUMENT_ERROR, "flag 'C' specified more than once");
+        }
+        resolve_flags |= RESOLVE_CACHED;
+        break;
+      case 'B':
+        if (unlikely(resolve_flags & RESOLVE_BENEATH)) {
+          mrb_raise(mrb, E_ARGUMENT_ERROR, "flag 'B' specified more than once");
+        }
+        resolve_flags |= RESOLVE_BENEATH;
+        break;
+      case 'R':
+        if (unlikely(resolve_flags & RESOLVE_IN_ROOT)) {
+          mrb_raise(mrb, E_ARGUMENT_ERROR, "flag 'R' specified more than once");
+        }
+        resolve_flags |= RESOLVE_IN_ROOT;
+        break;
+      default:
+        mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid resolve string");
+    }
+  }
+
+  return resolve_flags;
+}
+
+static mrb_value
+mrb_io_uring_open_how_init(mrb_state *mrb, mrb_value self)
+{
+  mrb_value flags = mrb_nil_value(), resolve = mrb_nil_value();
+  mrb_int mode = -1;
+  mrb_get_args(mrb, "|S!iS!", &flags, &mode, &resolve);
+
+  struct open_how *how = mrb_realloc(mrb, DATA_PTR(self), sizeof(*how));
+  mrb_data_init(self, how, &mrb_io_uring_open_how_type);
+
+  how->flags = mrb_io_uring_parse_flags_string(mrb, flags);
+  if (mode == -1) {
+    how->mode = (how->flags & (O_CREAT | O_TMPFILE)) ? 0666 : 0;
+  } else {
+    how->mode = (unsigned long long) mode;
+  }
+  how->resolve = mrb_io_uring_parse_resolve_string(mrb, resolve);
+
+  mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@flags"),    flags);
+  mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@mode"),     mrb_int_value(mrb, mode));
+  mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@resolve"),  resolve);
+
+  return self;
+}
+
+static mrb_value
+mrb_io_uring_operation_class_init(mrb_state *mrb, mrb_value self)
+{
+  mrb_value *argv;
+  mrb_int argc;
+  mrb_get_args(mrb, "*", &argv, &argc);
+
+  if (unlikely(argc < 1 || argc % 2 == 0)) {
+    mrb_raise(mrb, E_ARGUMENT_ERROR, "expecting an odd number of arguments; operation type followed by key-value pairs");
+  }
+
+  mrb_int type = mrb_integer(argv[0]);
+  if (unlikely(type < 0 || type > LAST_TYPE)) {
+    mrb_raise(mrb, E_RANGE_ERROR, "type isn't enum mrb_io_uring_op_types");
+  }
+
+  enum mrb_io_uring_op_types *operation_type = mrb_realloc(mrb, DATA_PTR(self), sizeof(*operation_type));
+  mrb_data_init(self, operation_type, &mrb_io_uring_operation_type);
+  *operation_type = type;
+
+  for (mrb_int i = 1; i < argc;) {
+    mrb_value key = argv[i++];
+    mrb_value value = argv[i++];
+
+    if (unlikely(!mrb_symbol_p(key))) {
+      mrb_raise(mrb, E_TYPE_ERROR, "expected symbol for key");
+    }
+
+    mrb_iv_set(mrb, self, mrb_symbol(key), value);
+  }
+
+  return self;
+}
+
+static mrb_value
+mrb_io_uring_operation_to_tcpserver(mrb_state *mrb, mrb_value self)
+{
+  mrb_value sock = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "@sock"));
+  mrb_value tcp_server = mrb_funcall(mrb, mrb_obj_value(mrb_class_get(mrb, "TCPServer")), "for_fd", 1, sock);
+  (void) mrb_io_fileno(mrb, tcp_server);
+  ((struct mrb_io *)DATA_PTR(tcp_server))->close_fd = 0;
+  return tcp_server;
+}
+
+static mrb_value
+mrb_io_uring_operation_to_udpsocket(mrb_state *mrb, mrb_value self)
+{
+  mrb_value sock = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "@sock"));
+  mrb_value udp_socket = mrb_funcall(mrb, mrb_obj_value(mrb_class_get(mrb, "UDPSocket")), "for_fd", 1, sock);
+  (void) mrb_io_fileno(mrb, udp_socket);
+  ((struct mrb_io *)DATA_PTR(udp_socket))->close_fd = 0;
+  return udp_socket;
+}
+
+static mrb_value
+mrb_io_uring_operation_to_socket(mrb_state *mrb, mrb_value self)
+{
+  mrb_value sock = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "@sock"));
+  sock = mrb_funcall(mrb, mrb_obj_value(mrb_class_get(mrb, "Socket")), "for_fd", 1, sock);
+  (void) mrb_io_fileno(mrb, sock);
+  ((struct mrb_io *)DATA_PTR(sock))->close_fd = 0;
+  return sock;
+}
+
+static mrb_value
+mrb_io_uring_operation_to_unixserver(mrb_state *mrb, mrb_value self)
+{
+  mrb_value sock = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "@sock"));
+  mrb_value unix_server = mrb_funcall(mrb, mrb_obj_value(mrb_class_get(mrb, "UNIXServer")), "for_fd", 1, sock);
+  (void) mrb_io_fileno(mrb, unix_server);
+  ((struct mrb_io *)DATA_PTR(unix_server))->close_fd = 0;
+  return unix_server;
+}
+
+static mrb_value
+mrb_io_uring_operation_to_tcpsocket(mrb_state *mrb, mrb_value self)
+{
+  mrb_value sock = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "@sock"));
+  mrb_value tcp_socket = mrb_funcall(mrb, mrb_obj_value(mrb_class_get(mrb, "TCPSocket")), "for_fd", 1, sock);
+  (void) mrb_io_fileno(mrb, tcp_socket);
+  ((struct mrb_io *)DATA_PTR(tcp_socket))->close_fd = 0;
+  return tcp_socket;
+}
+
+static mrb_value
+mrb_io_uring_operation_to_unixsocket(mrb_state *mrb, mrb_value self)
+{
+  mrb_value sock = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "@sock"));
+  mrb_value unix_socket = mrb_funcall(mrb, mrb_obj_value(mrb_class_get(mrb, "UNIXSocket")), "for_fd", 1, sock);
+  (void) mrb_io_fileno(mrb, unix_socket);
+  ((struct mrb_io *)DATA_PTR(unix_socket))->close_fd = 0;
+  return unix_socket;
+}
+
+static mrb_value
+mrb_io_uring_operation_to_file(mrb_state *mrb, mrb_value self)
+{
+  mrb_value file = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "@file"));
+  file = mrb_obj_new(mrb, mrb_class_get(mrb, "File"), 1, &file);
+  (void) mrb_io_fileno(mrb, file);
+  ((struct mrb_io *)DATA_PTR(file))->close_fd = 0;
+  return file;
+}
 
 static mrb_value
 mrb_uring_readable(mrb_state *mrb, mrb_value self)
@@ -1136,7 +1136,7 @@ mrb_mruby_io_uring_gem_init(mrb_state* mrb)
     }
   } else if (unlikely(!precomputed_bins)) {
       pthread_mutex_unlock(&mutex);
-      mrb_exc_raise(mrb, mrb_obj_value(mrb->nomem_err));    
+      mrb_exc_raise(mrb, mrb_obj_value(mrb->nomem_err));
   }
   pthread_mutex_unlock(&mutex);
 
@@ -1184,7 +1184,7 @@ if (can_use_buffers) {
   mrb_define_const (mrb, io_uring_class, "AT_FDCWD", mrb_fixnum_value(AT_FDCWD));
 
   io_uring_error_class = mrb_define_class_under(mrb, io_uring_class, "Error", E_RUNTIME_ERROR);
-  mrb_define_class_under(mrb, io_uring_class, "SQRingFullError",    io_uring_error_class);
+  mrb_define_class_under(mrb, io_uring_class, "SQRingFullError",  io_uring_error_class);
   mrb_define_class_under(mrb, io_uring_class, "NoBuffersError",   io_uring_error_class);
 
   io_uring_open_how_class = mrb_define_class_under(mrb, io_uring_class, "OpenHow", mrb->object_class);

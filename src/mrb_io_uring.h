@@ -3,22 +3,21 @@
 #include <liburing.h>
 #include <mruby.h>
 #include <mruby/data.h>
-#include <mruby/variable.h>
-#include <mruby/hash.h>
+#include <pthread.h>
+#include <sys/resource.h>
 #include <mruby/error.h>
-#include <mruby/class.h>
-#include <mruby/string.h>
+#include <string.h>
+#include <mruby/hash.h>
+#include <mruby/variable.h>
 #include <mruby/array.h>
 #include <mruby/io_uring.h>
-#include <mruby/proc.h>
-#include <mruby/ext/io.h>
-#include <stdlib.h>
-#include <sys/resource.h>
+#include <mruby/string.h>
+#include <mruby/class.h>
 #include <sys/poll.h>
 #include <mruby/throw.h>
-#include <stdatomic.h>
-#include <math.h>
-#include <pthread.h>
+#include <mruby/ext/io.h>
+#include <stdlib.h>
+#include <sys/param.h>
 
 #ifndef NSEC_PER_SEC
 #define NSEC_PER_SEC 1000000000
@@ -93,8 +92,6 @@ static const struct mrb_data_type mrb_io_uring_open_how_type = {
 
 #define MRB_IORING_DEFAULT_FIXED_BUFFER_SIZE 131072
 #define MAX_BUFFER_SIZE (1 << 30) // Taken from the io_uring man pages: registered buffers musn't be larger than 1 GB.
-#define MAX(a, b) ((a) > (b) ? (a) : (b))
-#define MIN(a, b) ((a) < (b) ? (a) : (b))
 
 static long page_size;
 static size_t *precomputed_bins = NULL;
