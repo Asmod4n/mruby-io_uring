@@ -55,7 +55,6 @@ mrb_io_uring_queue_init_params(mrb_state *mrb, mrb_value self)
         mrb_sys_fail(mrb, "io_uring_register_buffers_sparse");
       }
     }
-    return self;
   } else {
     errno = -ret;
     mrb_sys_fail(mrb, "io_uring_queue_init");
@@ -69,14 +68,15 @@ mrb_io_uring_buffer_get(mrb_state *mrb, mrb_io_uring_t *mrb_io_uring, mrb_int bu
 {
   buffer_size = MIN(MAX(buffer_size, page_size), MAX_BUFFER_SIZE);
   size_t size_bin = precomputed_bins[(size_t) (buffer_size / page_size)];
-  if (unlikely(mrb_io_uring->total_used_buffer_memory + size_bin > mrb_io_uring->memlock_limit)) {
+  if (unlikely(mrb_io_uring->total_used_buffer_memory + size_bin >= mrb_io_uring->memlock_limit)) {
     mrb_raise(mrb, E_RANGE_ERROR, "Total buffer memory would exceed RLIMIT_MEMLOCK limit");
   }
 
   mrb_value free_buffers = mrb_hash_get(mrb, mrb_io_uring->free_list, mrb_int_value(mrb, size_bin));
   if (mrb_array_p(free_buffers) && RARRAY_LEN(free_buffers) > 0) {
     mrb_int index = mrb_integer(mrb_ary_pop(mrb, free_buffers));
-    mrb_io_uring_buffer_t result = {index, mrb_obj_value((void *) mrb_io_uring->tags[index])};
+    mrb_io_uring_buffer_t result = {index, mrb_obj_value((struct RBasic *) mrb_io_uring->tags[index])};
+    puts("array");
     return result;
   }
 
@@ -86,10 +86,10 @@ mrb_io_uring_buffer_get(mrb_state *mrb, mrb_io_uring_t *mrb_io_uring, mrb_int bu
 
     mrb_io_uring->iovecs[mrb_io_uring->allocated_buffers].iov_base = RSTRING_PTR(buffer);
     mrb_io_uring->iovecs[mrb_io_uring->allocated_buffers].iov_len = size_bin;
-    mrb_io_uring->tags[mrb_io_uring->allocated_buffers] = (uintptr_t)mrb_cptr(buffer);
+    mrb_io_uring->tags[mrb_io_uring->allocated_buffers] = (uintptr_t) mrb_ptr(buffer);
     mrb_io_uring->calculated_sizes[mrb_io_uring->allocated_buffers] = size_bin;
 
-    int ret = io_uring_register_buffers_update_tag(&mrb_io_uring->ring, mrb_io_uring->allocated_buffers, mrb_io_uring->iovecs, mrb_io_uring->tags, 1);
+    int ret = io_uring_register_buffers_update_tag(&mrb_io_uring->ring, mrb_io_uring->allocated_buffers, &mrb_io_uring->iovecs[mrb_io_uring->allocated_buffers], &mrb_io_uring->tags[mrb_io_uring->allocated_buffers], 1);
     if (likely(ret == 1)) {
       mrb_hash_set(mrb, mrb_io_uring->buffers, buffer, mrb_int_value(mrb, mrb_io_uring->allocated_buffers));
       mrb_io_uring->total_used_buffer_memory += size_bin;
@@ -103,34 +103,6 @@ mrb_io_uring_buffer_get(mrb_state *mrb, mrb_io_uring_t *mrb_io_uring, mrb_int bu
   }
 
   mrb_raise(mrb, E_IO_URING_NO_BUFFERS_ERROR, "All fixed buffers are in use, you have to return them with ring.buffer_return(operation.buf) after you are done using them.");
-}
-
-
-static mrb_value
-mrb_io_uring_buffer_return(mrb_state *mrb, mrb_value self)
-{
-  mrb_io_uring_t *mrb_io_uring = DATA_PTR(self);
-
-  mrb_value buffer;
-  mrb_get_args(mrb, "S", &buffer);
-
-  mrb_value index_val = mrb_hash_get(mrb, mrb_io_uring->buffers, buffer);
-  if (unlikely(mrb_nil_p(index_val))) {
-    mrb_raise(mrb, E_ARGUMENT_ERROR, "buffer not found in buffers hash");
-  }
-  mrb_int calculated_size = mrb_io_uring->calculated_sizes[mrb_integer(index_val)];
-  MRB_UNSET_FROZEN_FLAG(mrb_obj_ptr(buffer));
-  mrb_str_resize(mrb, buffer, calculated_size - 1);
-  mrb_obj_freeze(mrb, buffer);
-  mrb_value size_bin = mrb_int_value(mrb, calculated_size);
-  mrb_value free_buffers = mrb_hash_get(mrb, mrb_io_uring->free_list, size_bin);
-  if (mrb_array_p(free_buffers)) {
-    mrb_ary_push(mrb, free_buffers, index_val);
-  } else {
-    mrb_hash_set(mrb, mrb_io_uring->free_list, size_bin, mrb_ary_new_from_values(mrb, 1, &index_val));
-  }
-
-  return self;
 }
 
 static mrb_value
@@ -566,17 +538,17 @@ mrb_io_uring_prep_read_fixed(mrb_state *mrb, mrb_value self)
     mrb_symbol_value(mrb_intern_lit(mrb, "@ring")), self,
     mrb_symbol_value(mrb_intern_lit(mrb, "@type")), mrb_symbol_value(mrb_intern_lit(mrb, "read_fixed")),
     mrb_symbol_value(mrb_intern_lit(mrb, "@file")), file,
-    mrb_symbol_value(mrb_intern_lit(mrb, "@buf")), buf
+    mrb_symbol_value(mrb_intern_lit(mrb, "@buf")), buf,
   };
   mrb_value operation = mrb_obj_new(mrb, mrb_class_get_under(mrb, mrb_class(mrb, self), "Operation"), NELEMS(argv), argv);
 
   struct io_uring_sqe *sqe = mrb_io_uring_get_sqe(mrb, &mrb_io_uring->ring);
   io_uring_sqe_set_data(sqe, mrb_ptr(operation));
+  io_uring_sqe_set_flags(sqe, (unsigned int) sqe_flags);
   io_uring_prep_read_fixed(sqe,
     fd,
     mrb_io_uring->iovecs[index].iov_base, RSTRING_CAPA(buf) + 1,
     (unsigned long long) offset, index);
-  io_uring_sqe_set_flags(sqe, (unsigned int) sqe_flags);
   mrb_hash_set(mrb, mrb_io_uring->sqes, operation, operation);
   mrb_obj_freeze(mrb, buf);
 
@@ -642,54 +614,74 @@ mrb_io_uring_prep_cancel(mrb_state *mrb, mrb_value self)
 }
 
 static mrb_value
-mrb_io_uring_process_cqe(mrb_state *mrb, struct io_uring_cqe *cqe)
+mrb_io_uring_process_cqe(mrb_state *mrb, mrb_io_uring_t *mrb_io_uring, struct io_uring_cqe *cqe)
 {
-  mrb_value operation = mrb_obj_value(io_uring_cqe_get_data(cqe));
-  enum mrb_io_uring_op_types *operation_t = DATA_PTR(operation);
-  mrb_value res = mrb_int_value(mrb, cqe->res);
-  mrb_iv_set(mrb, operation, mrb_intern_lit(mrb, "@res"), res);
-  mrb_iv_set(mrb, operation, mrb_intern_lit(mrb, "@flags"), mrb_int_value(mrb, cqe->flags));
+  mrb_value operation = mrb_obj_value((struct RBasic *)io_uring_cqe_get_data(cqe));
+  mrb_p(mrb, operation);
+  switch (mrb_type(operation))
+  {
+    case MRB_TT_STRING: {
+      puts("string");
+      mrb_value buffer = operation;
+      mrb_value index_val = mrb_hash_get(mrb, mrb_io_uring->buffers, buffer);
+      mrb_int buf_index = mrb_integer(index_val);
+      mrb_int calculated_size = mrb_io_uring->calculated_sizes[buf_index];
 
-  if (likely(cqe->res >= 0)) {
-    switch(*operation_t) {
-      case SOCKET:
-        mrb_iv_set(mrb, operation, mrb_intern_lit(mrb, "@sock"), res);
-      break;
-      case OPENAT2: {
-        mrb_iv_set(mrb, operation, mrb_intern_lit(mrb, "@file"), res);
-        mrb_value path = mrb_iv_get(mrb, operation, mrb_intern_lit(mrb, "@path"));
-        if (unlikely(!mrb_string_p(path))) {
-          mrb_raise(mrb, E_TYPE_ERROR, "path is not a string");
-        }
-        MRB_UNSET_FROZEN_FLAG(mrb_obj_ptr(path));
-      } break;
-      case RECV:
-      case READ:
-      case READFIXED: {
-        mrb_value buf = mrb_iv_get(mrb, operation, mrb_intern_lit(mrb, "@buf"));
-        if (likely(mrb_string_p(buf))) {
-          MRB_UNSET_FROZEN_FLAG(mrb_obj_ptr(buf));
-          mrb_str_resize(mrb, buf, cqe->res);
+      MRB_UNSET_FROZEN_FLAG(mrb_obj_ptr(buffer));
+      mrb_str_resize(mrb, buffer, calculated_size - 1);
+      mrb_obj_freeze(mrb, buffer);
+      mrb_io_uring->iovecs[buf_index].iov_base = RSTRING_PTR(buffer);
+      mrb_io_uring->tags[buf_index] = (uintptr_t)mrb_ptr(buffer);
+      int ret = io_uring_register_buffers_update_tag(&mrb_io_uring->ring, buf_index, &mrb_io_uring->iovecs[buf_index], &mrb_io_uring->tags[buf_index], 1);
+      if (likely(ret == 1)) {
+        mrb_value size_bin = mrb_int_value(mrb, calculated_size);
+        mrb_value free_buffers = mrb_hash_get(mrb, mrb_io_uring->free_list, size_bin);
+        if (mrb_array_p(free_buffers)) {
+          mrb_ary_push(mrb, free_buffers, index_val);
         } else {
-          mrb_raise(mrb, E_TYPE_ERROR, "buf is not a string");
+          mrb_hash_set(mrb, mrb_io_uring->free_list, size_bin, mrb_ary_new_from_values(mrb, 1, &index_val));
         }
-      } break;
-      case SEND:
-      case WRITE: {
-        mrb_value buf = mrb_iv_get(mrb, operation, mrb_intern_lit(mrb, "@buf"));
-        if (likely(mrb_string_p(buf))) {
-          MRB_UNSET_FROZEN_FLAG(mrb_obj_ptr(buf));
-        } else {
-          mrb_raise(mrb, E_TYPE_ERROR, "buf is not a string");
+      } else {
+        errno = -ret;
+        mrb_sys_fail(mrb, "io_uring_register_buffers_update_tag");
+      }
+    } break;
+    case MRB_TT_DATA: {
+      enum mrb_io_uring_op_types *operation_t = DATA_PTR(operation);
+      mrb_value res = mrb_int_value(mrb, cqe->res);
+      mrb_iv_set(mrb, operation, mrb_intern_lit(mrb, "@res"), res);
+      mrb_iv_set(mrb, operation, mrb_intern_lit(mrb, "@flags"), mrb_int_value(mrb, cqe->flags));
+
+      if (likely(cqe->res >= 0)) {
+        switch(*operation_t) {
+          case SOCKET:
+            mrb_iv_set(mrb, operation, mrb_intern_lit(mrb, "@sock"), res);
+          break;
+          case OPENAT2: {
+            mrb_iv_set(mrb, operation, mrb_intern_lit(mrb, "@file"), res);
+          } break;
+          case RECV:
+          case READ:
+          case READFIXED: {
+            mrb_value buf = mrb_iv_get(mrb, operation, mrb_intern_lit(mrb, "@buf"));
+            if (likely(mrb_string_p(buf))) {
+              MRB_UNSET_FROZEN_FLAG(mrb_obj_ptr(buf));
+              mrb_str_resize(mrb, buf, cqe->res);
+              mrb_obj_freeze(mrb, buf);
+            } else {
+              mrb_raise(mrb, E_TYPE_ERROR, "buf is not a string");
+            }
+          } break;
+          default:
+          break;
         }
-      } break;
-      default:
-      break;
-    }
-  } else {
-    mrb_value errno_val = mrb_fixnum_value(-cqe->res);
-    mrb_iv_set(mrb, operation, mrb_intern_lit(mrb, "@errno"), mrb_obj_new(mrb, mrb_class_get(mrb, "SystemCallError"), 1, &errno_val));
+      } else {
+        mrb_value errno_val = mrb_fixnum_value(-cqe->res);
+        mrb_iv_set(mrb, operation, mrb_intern_lit(mrb, "@errno"), mrb_obj_new(mrb, mrb_class_get(mrb, "SystemCallError"), 1, &errno_val));
+      }
+    } break;
   }
+  
 
   return operation;
 }
@@ -708,7 +700,7 @@ mrb_io_uring_iterate_over_cqes(mrb_state *mrb, mrb_value self, mrb_io_uring_t *m
     {
       mrb->jmp = &c_jmp;
       io_uring_for_each_cqe(&mrb_io_uring->ring, head, cqe) {
-        mrb_value operation = mrb_io_uring_process_cqe(mrb, cqe);
+        mrb_value operation = mrb_io_uring_process_cqe(mrb, mrb_io_uring, cqe);
         mrb_yield(mrb, block, operation);
         if (!(cqe->flags & IORING_CQE_F_MORE)) {
           mrb_hash_delete_key(mrb, mrb_io_uring->sqes, operation);
@@ -732,7 +724,7 @@ mrb_io_uring_iterate_over_cqes(mrb_state *mrb, mrb_value self, mrb_io_uring_t *m
     mrb_value operations = mrb_ary_new_capa(mrb, mrb_hash_size(mrb, mrb_io_uring->sqes));
     int arena_index = mrb_gc_arena_save(mrb);
     io_uring_for_each_cqe(&mrb_io_uring->ring, head, cqe) {
-      mrb_value operation = mrb_io_uring_process_cqe(mrb, cqe);
+      mrb_value operation = mrb_io_uring_process_cqe(mrb, mrb_io_uring, cqe);
       mrb_ary_push(mrb, operations, operation);
       if (!(cqe->flags & IORING_CQE_F_MORE)) {
         mrb_hash_delete_key(mrb, mrb_io_uring->sqes, operation);
@@ -1161,7 +1153,6 @@ mrb_mruby_io_uring_gem_init(mrb_state* mrb)
   mrb_define_method(mrb, io_uring_class, "prep_read",               mrb_io_uring_prep_read,               MRB_ARGS_ARG(1, 3));
 if (can_use_buffers) {
   mrb_define_method(mrb, io_uring_class, "prep_read_fixed",         mrb_io_uring_prep_read_fixed,         MRB_ARGS_ARG(1, 2));
-  mrb_define_method(mrb, io_uring_class, "buffer_return",  	        mrb_io_uring_buffer_return,           MRB_ARGS_REQ(1));
 }
   mrb_define_method(mrb, io_uring_class, "prep_write",  	          mrb_io_uring_prep_write,              MRB_ARGS_ARG(3, 1));
   mrb_define_method(mrb, io_uring_class, "prep_cancel",  	          mrb_io_uring_prep_cancel,             MRB_ARGS_ARG(1, 2));

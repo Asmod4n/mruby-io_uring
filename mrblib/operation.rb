@@ -73,6 +73,16 @@ class IO::Uring::Operation
     ring.prep_poll_update(old_operation, poll_mask, flags, sqe_flags)
   end
 
+  def openat2(path, directory = nil, open_how = nil, sqe_flags = 0)
+    sqe_flags |= SQE_IO_LINK
+    ring.prep_openat2(path, directory, open_how, sqe_flags)
+  end
+
+  def read_fixed(file, buffer_size = 131072, offset = 0, sqe_flags = 0)
+    sqe_flags |= SQE_IO_LINK
+    ring.prep_read_fixed(file, buffer_size, offset, sqe_flags)
+  end
+
   def cancel(operation, flags = IO::Uring::ASYNC_CANCEL_ALL, sqe_flags = 0)
     sqe_flags |= SQE_IO_LINK
     ring.prep_cancel(operation, flags, sqe_flags)
