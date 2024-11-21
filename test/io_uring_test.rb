@@ -7,6 +7,6 @@ assert('File io') do
     end
 
     ring.wait do |operation|
-        assert_equal(operation.buf, File.read(File.expand_path(File.dirname(__FILE__)) + '/file.txt', operation.buf))
+        assert_equal(operation.buf, File.read(File.expand_path(File.dirname(__FILE__)) + '/file.txt'))
     end
 end

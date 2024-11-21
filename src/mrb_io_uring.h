@@ -1,3 +1,4 @@
+#include "liburing/io_uring.h"
 #define _GNU_SOURCE
 #define _LARGEFILE64_SOURCE
 #include <liburing.h>
@@ -28,37 +29,10 @@
 
 #define NELEMS(argv) (sizeof(argv) / sizeof(argv[0]))
 
-enum mrb_io_uring_op_types {
-  SOCKET,
-  ACCEPT,
-  MULTISHOTACCEPT,
-  RECV,
-  SPLICE,
-  SEND,
-  SHUTDOWN,
-  CLOSE,
-  POLLADD,
-  POLLMULTISHOT,
-  POLLUPDATE,
-  OPENAT2,
-  READ,
-  READFIXED,
-  WRITE,
-  CANCEL,
-  LAST_TYPE = CANCEL
-};
-
 typedef struct {
   struct io_uring ring;
   struct io_uring_params params;
   mrb_value sqes;
-  size_t allocated_buffers;
-  size_t max_buffers;
-  size_t total_used_buffer_memory;
-  size_t memlock_limit;
-  struct iovec *iovecs;
-  unsigned long long *tags;
-  mrb_int *calculated_sizes;
   mrb_value buffers;
   mrb_value free_list;
 } mrb_io_uring_t;
@@ -73,18 +47,78 @@ mrb_io_uring_queue_exit_gc(mrb_state *mrb, void *p)
 {
   mrb_io_uring_t *mrb_io_uring = (mrb_io_uring_t *) p;
   io_uring_queue_exit(&mrb_io_uring->ring);
-  mrb_free(mrb, mrb_io_uring->iovecs);
-  mrb_free(mrb, mrb_io_uring->tags);
-  mrb_free(mrb, mrb_io_uring->calculated_sizes);
   mrb_free(mrb, p);
 }
 static const struct mrb_data_type mrb_io_uring_queue_type = {
   "$i_mrb_io_uring_queue_type", mrb_io_uring_queue_exit_gc
 };
 
+static int use_high_bits_temp = 0;
+const int const *USE_HIGH_BITS;
+
+static void
+mrb_io_uring_operation_gc_free(mrb_state *mrb, void *p)
+{
+  if (!*USE_HIGH_BITS) mrb_free(mrb, p);
+}
+
 static const struct mrb_data_type mrb_io_uring_operation_type = {
-  "$i_mrb_io_uring_operation_type", mrb_free
+  "$i_mrb_io_uring_operation_type", mrb_io_uring_operation_gc_free
 };
+
+
+typedef struct {
+    void *ptr;
+    uint8_t num;
+} PtrAndInt;
+
+
+static void
+initialize_high_bits_check(mrb_state *mrb)
+{
+    void *ptr = mrb_malloc(mrb, 1);
+
+    uintptr_t address = (uintptr_t)ptr;
+    use_high_bits_temp = !(address & 0xFFFF000000000000ULL);
+
+    mrb_free(mrb, ptr);
+    USE_HIGH_BITS = &use_high_bits_temp;
+}
+
+static uint64_t
+encode_operation_op(mrb_state *mrb, void *ptr, uint8_t number)
+{
+    if (*USE_HIGH_BITS) {
+        return ((uintptr_t)ptr & 0x0000FFFFFFFFFFFFULL) | ((uint64_t)(number) << (64 - 8));
+    } else {
+        PtrAndInt *pai = mrb_malloc(mrb, sizeof(PtrAndInt));
+        pai->ptr = ptr;
+        pai->num = number;
+        return (uintptr_t)pai;
+    }
+}
+
+static void *
+decode_operation(uint64_t packed_value)
+{
+    if (*USE_HIGH_BITS) {
+        return (void *)(packed_value & 0x0000FFFFFFFFFFFFULL);
+    } else {
+        PtrAndInt *pai = (PtrAndInt *)packed_value;
+        return pai->ptr;
+    }
+}
+
+static uint8_t
+decode_op(uint64_t packed_value)
+{
+    if (*USE_HIGH_BITS) {
+        return (uint8_t)(packed_value >> (64 - 8));
+    } else {
+        PtrAndInt *pai = (PtrAndInt *)packed_value;
+        return pai->num;
+    }
+}
 
 static const struct mrb_data_type mrb_io_uring_open_how_type = {
   "$i_mrb_io_uring_open_how_type", mrb_free
