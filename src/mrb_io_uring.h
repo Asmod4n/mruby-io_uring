@@ -34,6 +34,7 @@ typedef struct {
   struct io_uring_params params;
   mrb_value sqes;
   mrb_value buffers;
+  mrb_value buffer_lookup;
   mrb_value free_list;
 } mrb_io_uring_t;
 
@@ -69,7 +70,7 @@ static const struct mrb_data_type mrb_io_uring_operation_type = {
 
 typedef struct {
     void *ptr;
-    uint8_t num;
+    uint8_t op;
 } PtrAndInt;
 
 
@@ -86,14 +87,14 @@ initialize_high_bits_check(mrb_state *mrb)
 }
 
 static uint64_t
-encode_operation_op(mrb_state *mrb, void *ptr, uint8_t number)
+encode_operation_op(mrb_state *mrb, void *ptr, uint8_t op)
 {
     if (*USE_HIGH_BITS) {
-        return ((uintptr_t)ptr & 0x0000FFFFFFFFFFFFULL) | ((uint64_t)(number) << (64 - 8));
+        return ((uintptr_t)ptr & 0x0000FFFFFFFFFFFFULL) | ((uint64_t)(op) << (64 - 8));
     } else {
         PtrAndInt *pai = mrb_malloc(mrb, sizeof(PtrAndInt));
         pai->ptr = ptr;
-        pai->num = number;
+        pai->op = op;
         return (uintptr_t)pai;
     }
 }
@@ -116,7 +117,7 @@ decode_op(uint64_t packed_value)
         return (uint8_t)(packed_value >> (64 - 8));
     } else {
         PtrAndInt *pai = (PtrAndInt *)packed_value;
-        return pai->num;
+        return pai->op;
     }
 }
 

@@ -41,6 +41,19 @@ io_uring_prep_cancel
 io_uring_submit_and_wait_timeout
 ```
 
+String ownership
+----------------
+
+Functions which end in _fixed use a internal and private buffer pool, those buffers are mruby Strings and belong to the ring, not the user.
+
+You musnt't change them, they expire when the block from ring.wait ends and the contents will be changed once you use another _fixed function.
+If you need to hold a reference to a buffer string after the block you got it in expires you need to call the same function without the _fixed suffix.
+
+Performance of _fixed functions can be much higher.
+
+Every other function which takes a string argument freezes that string till io_uring has processed it and given back to you in a ring.wait block, where its unfrozen. If you gave the ring a frozen string, it returns frozen back to you.
+
+
 Here is an example on how to use them (requires mruby-phr for http parsing)
 -------------------------------------
 ```ruby
@@ -88,10 +101,8 @@ while true
 end
 ```
 
-uring.wait accepts a timeout as a float value, if a timeout occurs false is returned.
+uring.wait accepts two arguments, the number of operations to wait for and a timeout as a float value, if a timeout occurs false is returned.
 
-You can also use uring.wait without a block.
-It returns an array which you can then iterate over.
 
 API Docs
 ========
