@@ -7,7 +7,7 @@ current_pos = 0
 read_bytes = 0
 start = Chrono::Steady.now
 
-while i < 1000000
+while i < 100000
     ring.wait do |operation|
         raise operation.errno if operation.errno
         case operation.type
