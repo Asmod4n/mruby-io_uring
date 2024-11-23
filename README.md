@@ -4,12 +4,13 @@ io_uring for mruby (WIP)
 
 Requirements
 ============
-This requires at least Linux 5.19
+This is only working with a linux kernel.
 
 Installation
 ============
+The gem is called mruby-io-uring for adding it to your project.
+Since there are numerous versions of liburing around we are shipping a version which is compatible with this gem.
 
-You have to install liburing with development headers first. Then add
 ```ruby
 conf.gem mgem: 'mruby-io-uring'
 ```
@@ -20,7 +21,7 @@ Supported functions
 
 At the moment the following functions are implemented.
 ```c
-io_uring_queue_init
+io_uring_queue_init_params
 io_uring_submit
 io_uring_prep_socket
 io_uring_prep_accept
@@ -32,9 +33,26 @@ io_uring_prep_shutdown
 io_uring_prep_close
 io_uring_prep_poll_add
 io_uring_prep_poll_multishot
+io_uring_prep_openat2
+io_uring_prep_read
+io_uring_prep_read_fixed
+io_uring_prep_write
 io_uring_prep_cancel
-io_uring_wait_cqe_timeout
+io_uring_submit_and_wait_timeout
 ```
+
+String ownership
+----------------
+
+Functions which end in _fixed use a internal and private buffer pool, those buffers are mruby Strings and belong to the ring, not the user.
+
+You musnt't change them, they expire when the block from ring.wait ends and the contents will be changed once you use another _fixed function.
+If you need to hold a reference to a buffer string after the block you got it in expires you need to call the same function without the _fixed suffix.
+
+Performance of _fixed functions can be much higher.
+
+Every other function which takes a string argument freezes that string till io_uring has processed it and given back to you in a ring.wait block, where its unfrozen. If you gave the ring a frozen string, it returns frozen back to you.
+
 
 Here is an example on how to use them (requires mruby-phr for http parsing)
 -------------------------------------
@@ -83,10 +101,39 @@ while true
 end
 ```
 
-uring.wait accepts a timeout as a float value, if a timeout occurs false is returned.
+uring.wait accepts two arguments, the number of operations to wait for and a timeout as a float value, if a timeout occurs false is returned.
 
-You can also use uring.wait without a block.
-It returns an array which you can then iterate over.
+
+API Docs
+========
+
+IO::Uring::OpenHow.new(flags = nil, mode = 0, resolve = nil)
+
+### Supported Flags
+
+- `r`: `O_RDONLY` (read-only)
+- `w`: `O_WRONLY | O_CREAT | O_TRUNC` (write-only, create file if not exists, truncate if exists)
+- `a`: `O_WRONLY | O_CREAT | O_APPEND` (append, create file if not exists)
+- `+`: `O_RDWR` (read and write, must follow `r`, `w`, or `a`)
+- `e`: `O_CLOEXEC` (close file descriptor on exec)
+- `s`: `O_SYNC` (synchronize)
+- `d`: `O_DIRECT` (direct access)
+- `t`: `O_TMPFILE` (temporary file)
+- `na`: `O_NOATIME` (do not update access time)
+- `nc`: `O_NOCTTY` (do not assign controlling terminal)
+- `nf`: `O_NOFOLLOW` (do not follow symbolic links)
+- `nb`: `O_NONBLOCK` (non-blocking)
+- `x`: `O_EXCL` (error if file exists)
+- `D`: `O_DIRECTORY` (must be a directory)
+- `P`: `O_PATH` (resolve pathname, do not open file)
+
+### Supported Resolve
+
+- `L`: `RESOLVE_NO_SYMLINKS` (do not follow symbolic links)
+- `X`: `RESOLVE_NO_XDEV` (do not resolve across filesystem boundaries)
+- `C`: `RESOLVE_CACHED` (use cached resolution)
+- `B`: `RESOLVE_BENEATH` (resolve only beneath the directory)
+- `R`: `RESOLVE_IN_ROOT` (perform resolution in root directory)
 
 
 LICENSE
