@@ -1,5 +1,4 @@
 #include "mrb_io_uring.h"
-#include "liburing/io_uring.h"
 
 static mrb_value
 mrb_io_uring_queue_init_params(mrb_state *mrb, mrb_value self)
@@ -702,8 +701,8 @@ mrb_io_uring_process_cqe(mrb_state *mrb, mrb_io_uring_t *mrb_io_uring, struct io
 
   if (likely(cqe->res >= 0)) {
     switch(decode_op(userdata)) {
-      case IORING_OP_SOCKET:
       case IORING_OP_ACCEPT:
+      case IORING_OP_SOCKET:
         mrb_iv_set(mrb, operation, mrb_intern_lit(mrb, "@sock"), res);
       break;
       case IORING_OP_OPENAT2: {
@@ -718,8 +717,8 @@ mrb_io_uring_process_cqe(mrb_state *mrb, mrb_io_uring_t *mrb_io_uring, struct io
           mrb_raise(mrb, E_TYPE_ERROR, "path is not a string");
         }
       } break;
-      case IORING_OP_RECV:
-      case IORING_OP_READ: {
+      case IORING_OP_READ:
+      case IORING_OP_RECV: {
         mrb_value buf = mrb_iv_get(mrb, operation, mrb_intern_lit(mrb, "@buf"));
         if (likely(mrb_string_p(buf))) {
           mrb_value check_buffer = mrb_hash_get(mrb, mrb_io_uring->buffers, buf);
