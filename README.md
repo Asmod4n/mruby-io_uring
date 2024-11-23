@@ -138,6 +138,25 @@ IO::Uring::OpenHow.new(flags = nil, mode = 0, resolve = nil)
 - `B`: `RESOLVE_BENEATH` (resolve only beneath the directory)
 - `R`: `RESOLVE_IN_ROOT` (perform resolution in root directory)
 
+Operations
+==========
+
+Using a ring.prep function retuns you an operation which is about to be send to the ring when you call ring.wait,
+that operation has operation.userdata and opration.userdata= functions which you can use however you like.
+One example is turning a created tcp socket into a ruby TCPSocket object and storing that as the userdata for said operation.
+
+```ruby
+operation = ring.prep_socket(Socket::AF_INET, Socket::SOCK_STREAM, 0)
+ring.wait do |operation|
+    operation.userdata = operation.to_io
+end
+```
+
+That way, you can do some socket operations which aren't implemented in this gem directly with the methods mruby gives you for a TCPSocket, any time you need it, like operation.userdata.remote_address to get the Addrinfo of the server you have connected to.
+When using functions which swap out the operation you gave it the userdata is retained.
+
+We check what type the underlaying socket is and give you a appropiate one back, be aware, you only gain TCPServer and UNIXServer objects back when the sockets are accepting connections, so you have to wait after you called prep_accept on them to gain the correct type.
+
 
 LICENSE
 =======

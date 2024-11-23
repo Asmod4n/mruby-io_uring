@@ -1083,74 +1083,105 @@ mrb_io_uring_operation_class_init(mrb_state *mrb, mrb_value self)
   return self;
 }
 
-static mrb_value
-mrb_io_uring_operation_to_tcpserver(mrb_state *mrb, mrb_value self)
-{
-  mrb_value sock = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "@sock"));
-  mrb_value tcp_server = mrb_funcall(mrb, mrb_obj_value(mrb_class_get(mrb, "TCPServer")), "for_fd", 1, sock);
-  (void) mrb_io_fileno(mrb, tcp_server);
-  ((struct mrb_io *)DATA_PTR(tcp_server))->close_fd = 0;
-  return tcp_server;
+static const char *unsupported_socket_family_name(int family) {
+  switch (family) {
+    case AF_LOCAL: return "AF_LOCAL (Local Communication)";
+    case AF_PACKET: return "AF_PACKET (Low-level Packet Interface)";
+    case AF_NETLINK: return "AF_NETLINK (Kernel/User-space Communication)";
+    case AF_BLUETOOTH: return "AF_BLUETOOTH (Bluetooth)";
+    case AF_VSOCK: return "AF_VSOCK (VM Communication)";
+    case AF_X25: return "AF_X25 (X.25 Protocol)";
+    case AF_AX25: return "AF_AX25 (Amateur Radio X.25)";
+    case AF_IPX: return "AF_IPX (IPX Protocol)";
+    case AF_APPLETALK: return "AF_APPLETALK (AppleTalk Protocol)";
+    case AF_ATMPVC: return "AF_ATMPVC (ATM PVCs)";
+    case AF_ALG: return "AF_ALG (Kernel Crypto API)";
+    default: return "Unknown";
+  }
+}
+
+static const char *unsupported_socket_type_name(int type) {
+  switch (type) {
+    case SOCK_RAW: return "SOCK_RAW (Raw Protocol)";
+    case SOCK_RDM: return "SOCK_RDM (Reliable Datagram)";
+    case SOCK_SEQPACKET: return "SOCK_SEQPACKET (Sequenced Packet)";
+    default: return "Unknown";
+  }
 }
 
 static mrb_value
-mrb_io_uring_operation_to_udpsocket(mrb_state *mrb, mrb_value self)
+mrb_io_uring_operation_to_io(mrb_state *mrb, mrb_value self)
 {
-  mrb_value sock = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "@sock"));
-  mrb_value udp_socket = mrb_funcall(mrb, mrb_obj_value(mrb_class_get(mrb, "UDPSocket")), "for_fd", 1, sock);
-  (void) mrb_io_fileno(mrb, udp_socket);
-  ((struct mrb_io *)DATA_PTR(udp_socket))->close_fd = 0;
-  return udp_socket;
-}
+  mrb_value sock_obj, file_obj;
 
-static mrb_value
-mrb_io_uring_operation_to_socket(mrb_state *mrb, mrb_value self)
-{
-  mrb_value sock = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "@sock"));
-  sock = mrb_funcall(mrb, mrb_obj_value(mrb_class_get(mrb, "Socket")), "for_fd", 1, sock);
-  (void) mrb_io_fileno(mrb, sock);
-  ((struct mrb_io *)DATA_PTR(sock))->close_fd = 0;
-  return sock;
-}
+  sock_obj = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "@sock"));
+  file_obj = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "@file"));
 
-static mrb_value
-mrb_io_uring_operation_to_unixserver(mrb_state *mrb, mrb_value self)
-{
-  mrb_value sock = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "@sock"));
-  mrb_value unix_server = mrb_funcall(mrb, mrb_obj_value(mrb_class_get(mrb, "UNIXServer")), "for_fd", 1, sock);
-  (void) mrb_io_fileno(mrb, unix_server);
-  ((struct mrb_io *)DATA_PTR(unix_server))->close_fd = 0;
-  return unix_server;
-}
+  if (!mrb_nil_p(sock_obj)) {
+    struct RClass *socket_class = NULL;
+    struct sockaddr_storage addr;
+    socklen_t addrlen = sizeof(addr);
+    int sockfd = mrb_integer(mrb_convert_type(mrb, sock_obj, MRB_TT_INTEGER, "Integer", "fileno"));
 
-static mrb_value
-mrb_io_uring_operation_to_tcpsocket(mrb_state *mrb, mrb_value self)
-{
-  mrb_value sock = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "@sock"));
-  mrb_value tcp_socket = mrb_funcall(mrb, mrb_obj_value(mrb_class_get(mrb, "TCPSocket")), "for_fd", 1, sock);
-  (void) mrb_io_fileno(mrb, tcp_socket);
-  ((struct mrb_io *)DATA_PTR(tcp_socket))->close_fd = 0;
-  return tcp_socket;
-}
+    int optval;
+    socklen_t optlen = sizeof(optval);
 
-static mrb_value
-mrb_io_uring_operation_to_unixsocket(mrb_state *mrb, mrb_value self)
-{
-  mrb_value sock = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "@sock"));
-  mrb_value unix_socket = mrb_funcall(mrb, mrb_obj_value(mrb_class_get(mrb, "UNIXSocket")), "for_fd", 1, sock);
-  (void) mrb_io_fileno(mrb, unix_socket);
-  ((struct mrb_io *)DATA_PTR(unix_socket))->close_fd = 0;
-  return unix_socket;
-}
+    if (unlikely(getsockopt(sockfd, SOL_SOCKET, SO_ACCEPTCONN, &optval, &optlen) == -1)) {
+      mrb_raise(mrb, E_RUNTIME_ERROR, "failed to get socket options");
+    }
 
-static mrb_value
-mrb_io_uring_operation_to_file(mrb_state *mrb, mrb_value self)
-{
-  mrb_value file = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "@file"));
-  file = mrb_obj_new(mrb, mrb_class_get(mrb, "File"), 1, &file);
-  (void) mrb_io_fileno(mrb, file);
-  ((struct mrb_io *)DATA_PTR(file))->close_fd = 0;
-  return file;
+    if (unlikely(getsockname(sockfd, (struct sockaddr *)&addr, &addrlen) == -1)) {
+      mrb_raise(mrb, E_RUNTIME_ERROR, "failed to get socket name");
+    }
+
+    switch (addr.ss_family) {
+      case AF_INET:
+      case AF_INET6:
+        if (optval) {
+          socket_class = mrb_class_get(mrb, "TCPServer");
+        } else {
+          int socktype;
+          if (unlikely(getsockopt(sockfd, SOL_SOCKET, SO_TYPE, &socktype, &optlen) == -1)) {
+            mrb_raise(mrb, E_RUNTIME_ERROR, "failed to get socket type");
+          }
+          switch (socktype) {
+            case SOCK_STREAM:
+              socket_class = mrb_class_get(mrb, "TCPSocket");
+              break;
+            case SOCK_DGRAM:
+              socket_class = mrb_class_get(mrb, "UDPSocket");
+              break;
+            default: {
+              const char *type_name = unsupported_socket_type_name(socktype);
+              mrb_raisef(mrb, E_ARGUMENT_ERROR, "unsupported socket type: %s", type_name);
+            }
+          }
+        }
+        break;
+      case AF_UNIX:
+        socket_class = optval ? mrb_class_get(mrb, "UNIXServer") : mrb_class_get(mrb, "UNIXSocket");
+        break;
+      default: {
+        const char *family_name = unsupported_socket_family_name(addr.ss_family);
+        mrb_raisef(mrb, E_ARGUMENT_ERROR, "unsupported socket family: %s", family_name);
+      }
+    }
+
+    mrb_value socket_obj = mrb_funcall(mrb, mrb_obj_value(socket_class), "for_fd", 1, sock_obj);
+    (void)mrb_io_fileno(mrb, socket_obj);
+    ((struct mrb_io *)DATA_PTR(socket_obj))->close_fd = 0;
+    return socket_obj;
+
+  } else if (!mrb_nil_p(file_obj)) {
+    file_obj = mrb_obj_new(mrb, mrb_class_get(mrb, "File"), 1, &file_obj);
+    (void)mrb_io_fileno(mrb, file_obj);
+    ((struct mrb_io *)DATA_PTR(file_obj))->close_fd = 0;
+    return file_obj;
+  } else {
+    mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid @sock or @file descriptor");
+  }
+
+  return mrb_nil_value();  // Should not reach here
 }
 
 static mrb_value
@@ -1313,13 +1344,7 @@ if (can_use_buffers) {
   mrb_define_const (mrb, io_uring_op_class, "CQE_F_SOCK_NONEMPTY",  mrb_fixnum_value(IORING_CQE_F_SOCK_NONEMPTY));
   mrb_define_const (mrb, io_uring_op_class, "CQE_F_NOTIF",          mrb_fixnum_value(IORING_CQE_F_NOTIF));
   mrb_define_const (mrb, io_uring_op_class, "SQE_IO_LINK",          mrb_fixnum_value(IOSQE_IO_LINK));
-  mrb_define_method(mrb, io_uring_op_class, "to_tcpsocket",         mrb_io_uring_operation_to_tcpsocket,  MRB_ARGS_NONE());
-  mrb_define_method(mrb, io_uring_op_class, "to_tcpserver",         mrb_io_uring_operation_to_tcpserver,  MRB_ARGS_NONE());
-  mrb_define_method(mrb, io_uring_op_class, "to_udpsocket",         mrb_io_uring_operation_to_udpsocket,  MRB_ARGS_NONE());
-  mrb_define_method(mrb, io_uring_op_class, "to_socket",            mrb_io_uring_operation_to_socket,     MRB_ARGS_NONE());
-  mrb_define_method(mrb, io_uring_op_class, "to_unixsocket",        mrb_io_uring_operation_to_unixsocket, MRB_ARGS_NONE());
-  mrb_define_method(mrb, io_uring_op_class, "to_unixserver",        mrb_io_uring_operation_to_unixserver, MRB_ARGS_NONE());
-  mrb_define_method(mrb, io_uring_op_class, "to_file",              mrb_io_uring_operation_to_file,       MRB_ARGS_NONE());
+  mrb_define_method(mrb, io_uring_op_class, "to_io",                mrb_io_uring_operation_to_io,  MRB_ARGS_NONE());
   mrb_define_method(mrb, io_uring_op_class, "readable?",            mrb_uring_readable, MRB_ARGS_NONE());
   mrb_define_method(mrb, io_uring_op_class, "writable?",            mrb_uring_writable, MRB_ARGS_NONE());
 }

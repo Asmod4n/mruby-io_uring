@@ -11,11 +11,14 @@ phr = Phr.new
 
 while true
   uring.wait do |operation|
-    raise operation.errno if operation.errno
+    if operation.errno
+      puts operation.inspect
+      raise operation.errno 
+    end
     puts "Flags: #{operation.flags}"
     case operation.type
     when :multishot_accept
-      puts "Remote Address: #{operation.to_tcpsocket.remote_address.inspect}"
+      puts "Remote Address: #{operation.to_io.remote_address.inspect}"
       puts "Socket        : #{operation.res}"
       uring.prep_recv(operation.res)
     when :recv

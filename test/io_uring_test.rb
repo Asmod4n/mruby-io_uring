@@ -3,6 +3,7 @@ assert('File io') do
     io_uring.prep_openat2('file.txt', File.open(File.expand_path(File.dirname(__FILE__))))
 
     io_uring.wait(1, 1) do |operation|
+        assert_equal(operation.to_io.class, File)
         io_uring.prep_read(operation.file)
     end
 
@@ -20,9 +21,13 @@ assert ('Socket io') do
     i = 5
     while i > 0
         num_cqes = io_uring.wait(1, 1) do |operation|
-            raise operation.errno if operation.errno
+            if operation.errno
+                puts operation.inspect
+                raise operation.errno 
+            end
             case operation.type
             when :socket
+                assert_equal(operation.to_io.class, TCPSocket)
                 io_uring.prep_connect(operation.sock, server.local_address.to_sockaddr)
             when :connect
                 io_uring.prep_send(operation.sock, "hello")
