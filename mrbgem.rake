@@ -4,6 +4,8 @@ MRuby::Gem::Specification.new('mruby-io-uring') do |spec|
   spec.summary = 'io_uring for mruby'
   spec.add_dependency 'mruby-io'
   spec.add_dependency 'mruby-socket'
+  spec.add_dependency 'mruby-errno'
+  spec.add_dependency 'mruby-signal'
   unless File.exists? "#{spec.build_dir}/build/lib/liburing.a"
     command = "mkdir -p #{spec.build_dir}/build && cd #{spec.dir}/deps/liburing/ && ./configure "
     if spec.build.debug_enabled?

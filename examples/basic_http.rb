@@ -2,8 +2,9 @@ body = "hallo\n"
 headers = "HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Type: text/plain\r\nContent-Length: #{body.bytesize}\r\n\r\n"
 response = "#{headers}#{body}"
 uring = IO::Uring.new
-server = TCPServer.new(12345)
+server = TCPServer.new(0)
 server.listen(4096)
+puts server.local_address.ip_port
 uring.prep_multishot_accept(server)
 
 phr = Phr.new

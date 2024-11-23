@@ -1,4 +1,5 @@
 #include "mrb_io_uring.h"
+#include "liburing/io_uring.h"
 
 static mrb_value
 mrb_io_uring_queue_init_params(mrb_state *mrb, mrb_value self)
@@ -239,7 +240,7 @@ mrb_io_uring_prep_connect(mrb_state *mrb, mrb_value self)
 
   mrb_value argv[] = {
     mrb_symbol_value(mrb_intern_lit(mrb, "@ring")),     self,
-    mrb_symbol_value(mrb_intern_lit(mrb, "@type")),     mrb_symbol_value(mrb_intern_lit(mrb, "accept")),
+    mrb_symbol_value(mrb_intern_lit(mrb, "@type")),     mrb_symbol_value(mrb_intern_lit(mrb, "connect")),
     mrb_symbol_value(mrb_intern_lit(mrb, "@sock")),     sock,
     mrb_symbol_value(mrb_intern_lit(mrb, "@addrinfo")), addrinfo
   };
@@ -702,6 +703,7 @@ mrb_io_uring_process_cqe(mrb_state *mrb, mrb_io_uring_t *mrb_io_uring, struct io
   if (likely(cqe->res >= 0)) {
     switch(decode_op(userdata)) {
       case IORING_OP_SOCKET:
+      case IORING_OP_ACCEPT:
         mrb_iv_set(mrb, operation, mrb_intern_lit(mrb, "@sock"), res);
       break;
       case IORING_OP_OPENAT2: {
@@ -783,7 +785,7 @@ mrb_io_uring_return_used_buffer(mrb_state *mrb, mrb_io_uring_t *mrb_io_uring, mr
 }
 
 static mrb_value
-mrb_io_uring_iterate_over_cqes(mrb_state *mrb, mrb_value self, mrb_io_uring_t *mrb_io_uring, mrb_value block, struct io_uring_cqe *cqe)
+mrb_io_uring_iterate_over_cqes(mrb_state *mrb, int rc, mrb_io_uring_t *mrb_io_uring, mrb_value block, struct io_uring_cqe *cqe)
 {
   struct mrb_jmpbuf* prev_jmp = mrb->jmp;
   struct mrb_jmpbuf c_jmp;
@@ -818,7 +820,7 @@ mrb_io_uring_iterate_over_cqes(mrb_state *mrb, mrb_value self, mrb_io_uring_t *m
   }
   MRB_END_EXC(&c_jmp);
 
-  return self;
+  return mrb_int_value(mrb, rc);
 }
 
 static mrb_value
@@ -830,11 +832,10 @@ mrb_io_uring_submit_and_wait_timeout(mrb_state *mrb, mrb_value self)
   mrb_float timeout = -1.0;
   mrb_value block = mrb_nil_value();
   mrb_get_args(mrb, "|if&", &wait_nr, &timeout, &block);
-
   int rc;
   struct io_uring_cqe *cqe = NULL;
-  if (timeout >= 0.0) {
-    timeout += 0.5e-9; // we are adding this so ts can't become negative.
+  if (timeout >= 0) {
+    timeout += 1e-17; // we are adding this so ts can't become negative.
     struct __kernel_timespec ts = {
       .tv_sec  = timeout,
       .tv_nsec = (timeout - (mrb_int)(timeout)) * NSEC_PER_SEC
@@ -851,7 +852,7 @@ mrb_io_uring_submit_and_wait_timeout(mrb_state *mrb, mrb_value self)
     mrb_sys_fail(mrb, "io_uring_submit_and_wait_timeout");
   }
 
-  return mrb_io_uring_iterate_over_cqes(mrb, self, mrb_io_uring, block, cqe);
+  return mrb_io_uring_iterate_over_cqes(mrb, rc, mrb_io_uring, block, cqe);
 }
 
 static __u64

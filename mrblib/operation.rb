@@ -33,6 +33,11 @@ class IO::Uring::Operation
     ring.prep_multishot_accept(sock, flags, sqe_flags)
   end
 
+  def connect(sock, addrinfo, sqe_flags = 0)
+    sqe_flags |= SQE_IO_LINK
+    ring.prep_connect(sock, addrinfo, sqe_flags)
+  end
+
   def recv(sock, len = 0, flags = 0, sqe_flags = 0)
     sqe_flags |= SQE_IO_LINK
     ring.prep_recv(sock, len, flags, sqe_flags)

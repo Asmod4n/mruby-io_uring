@@ -8,13 +8,15 @@ This is only working with a linux kernel.
 
 Installation
 ============
-The gem is called mruby-io-uring for adding it to your project.
-Since there are numerous versions of liburing around we are shipping a version which is compatible with this gem.
+The gem is called mruby-io-uring for adding it to your project, here is an example.
 
 ```ruby
 conf.gem mgem: 'mruby-io-uring'
 ```
-to your build_config.rb
+to add it to your build_config.rb
+
+Since there are numerous versions of liburing around we are shipping a version which is compatible with this gem.
+
 
 Supported functions
 ===================
@@ -26,6 +28,7 @@ io_uring_submit
 io_uring_prep_socket
 io_uring_prep_accept
 io_uring_prep_accept_multishot
+io_uring_prep_connect
 io_uring_prep_recv
 io_uring_prep_splice
 io_uring_prep_send
