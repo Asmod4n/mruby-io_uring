@@ -101,7 +101,7 @@ while true
 end
 ```
 
-uring.wait accepts two arguments, the number of operations to wait for and a timeout as a float value, if a timeout occurs false is returned.
+uring.wait accepts two arguments, the number of operations to wait for, by default 1, and a timeout as a float value, if a timeout occurs false is returned.
 
 
 API Docs

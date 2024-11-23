@@ -231,6 +231,36 @@ mrb_io_uring_prep_multishot_accept(mrb_state *mrb, mrb_value self)
 }
 
 static mrb_value
+mrb_io_uring_prep_connect(mrb_state *mrb, mrb_value self)
+{
+  mrb_value sock, addrinfo;
+  mrb_int sqe_flags = 0;
+  mrb_get_args(mrb, "oS|i", &sock, &addrinfo, &sqe_flags);
+
+  mrb_value argv[] = {
+    mrb_symbol_value(mrb_intern_lit(mrb, "@ring")),     self,
+    mrb_symbol_value(mrb_intern_lit(mrb, "@type")),     mrb_symbol_value(mrb_intern_lit(mrb, "accept")),
+    mrb_symbol_value(mrb_intern_lit(mrb, "@sock")),     sock,
+    mrb_symbol_value(mrb_intern_lit(mrb, "@addrinfo")), addrinfo
+  };
+  mrb_value operation = mrb_obj_new(mrb, mrb_class_get_under(mrb, mrb_class(mrb, self), "Operation"), NELEMS(argv), argv);
+  uint64_t encoded_operation = encode_operation_op(mrb, mrb_ptr(operation), IORING_OP_CONNECT);
+  mrb_data_init(operation, &encoded_operation, &mrb_io_uring_operation_type);
+
+  mrb_io_uring_t *mrb_io_uring = DATA_PTR(self);
+  struct io_uring_sqe *sqe = mrb_io_uring_get_sqe(mrb, &mrb_io_uring->ring);
+  io_uring_sqe_set_flags(sqe, (unsigned int) sqe_flags);
+  io_uring_sqe_set_data64(sqe, encoded_operation);
+  io_uring_prep_connect(sqe,
+  (int) mrb_integer(mrb_convert_type(mrb, sock, MRB_TT_INTEGER, "Integer", "fileno")),
+  (const struct sockaddr *) RSTRING_PTR(addrinfo), RSTRING_LEN(addrinfo)
+  );
+  mrb_hash_set(mrb, mrb_io_uring->sqes, operation, operation);
+
+  return operation;
+}
+
+static mrb_value
 mrb_io_uring_prep_recv(mrb_state *mrb, mrb_value self)
 {
   mrb_value sock;
@@ -1231,6 +1261,7 @@ mrb_mruby_io_uring_gem_init(mrb_state* mrb)
   mrb_define_method(mrb, io_uring_class, "initialize",              mrb_io_uring_queue_init_params,       MRB_ARGS_OPT(2));
   mrb_define_method(mrb, io_uring_class, "submit",                  mrb_io_uring_submit,                  MRB_ARGS_NONE());
   mrb_define_method(mrb, io_uring_class, "prep_socket",             mrb_io_uring_prep_socket,             MRB_ARGS_ARG(3, 2));
+  mrb_define_method(mrb, io_uring_class, "prep_connect",            mrb_io_uring_prep_connect,            MRB_ARGS_ARG(2, 1));
   mrb_define_method(mrb, io_uring_class, "prep_accept",             mrb_io_uring_prep_accept,             MRB_ARGS_ARG(1, 2));
   mrb_define_method(mrb, io_uring_class, "prep_multishot_accept",   mrb_io_uring_prep_multishot_accept,   MRB_ARGS_ARG(1, 2));
   mrb_define_method(mrb, io_uring_class, "prep_recv",               mrb_io_uring_prep_recv,               MRB_ARGS_ARG(1, 3));
