@@ -42,6 +42,7 @@ mrb_io_uring_queue_init_params(mrb_state *mrb, mrb_value self)
       if (likely(ret == 0)) {
         mrb_io_uring->buffers = mrb_hash_new(mrb);
         mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "buffers"), mrb_io_uring->buffers);
+        mrb_io_uring->num_buffers = 0;
         mrb_io_uring->free_list = mrb_hash_new(mrb);
         mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "free_list"), mrb_io_uring->free_list);
       } else {
@@ -65,24 +66,23 @@ mrb_io_uring_buffer_get(mrb_state *mrb, mrb_io_uring_t *mrb_io_uring, mrb_int bu
   mrb_value free_buffers = mrb_hash_get(mrb, mrb_io_uring->free_list, mrb_int_value(mrb, size_bin));
   if (mrb_array_p(free_buffers) && RARRAY_LEN(free_buffers) > 0) {
     mrb_value buffer = mrb_ary_pop(mrb, free_buffers);
-    mrb_value index_val = mrb_hash_get(mrb, mrb_io_uring->buffers, buffer);
+    mrb_value index_val = mrb_hash_get(mrb, mrb_io_uring->buffers, mrb_int_value(mrb, (intptr_t)mrb_ptr(buffer)));
     mrb_int index = mrb_as_int(mrb, index_val);
-    mrb_io_uring_buffer_t result = {index, index_val, buffer };
-
+    mrb_io_uring_buffer_t result = {index, index_val, buffer};
+  
     return result;
   }
 
-  mrb_int allocated_buffers = mrb_hash_size(mrb, mrb_io_uring->buffers);
   mrb_value buffer = mrb_str_new_capa(mrb, size_bin - 1);
   mrb_obj_freeze(mrb, buffer);
 
   struct iovec iovec = { RSTRING_PTR(buffer), size_bin };
-  int ret = io_uring_register_buffers_update_tag(&mrb_io_uring->ring, allocated_buffers, &iovec, NULL, 1);
+  int ret = io_uring_register_buffers_update_tag(&mrb_io_uring->ring, mrb_io_uring->num_buffers, &iovec, NULL, 1);
   if (likely(ret == 1)) {
-    mrb_io_uring_buffer_t result = { allocated_buffers, mrb_int_value(mrb, allocated_buffers),  buffer };
+    mrb_io_uring_buffer_t result = { mrb_io_uring->num_buffers, mrb_int_value(mrb, mrb_io_uring->num_buffers),  buffer };
 
-    mrb_hash_set(mrb, mrb_io_uring->buffers, buffer, result.index_val);
-
+    mrb_hash_set(mrb, mrb_io_uring->buffers, mrb_int_value(mrb, (intptr_t)mrb_ptr(buffer)), result.index_val);
+    mrb_io_uring->num_buffers++;
     return result;
   } else {
     errno = -ret;
@@ -114,38 +114,38 @@ mrb_io_uring_get_sqe(mrb_state *mrb, struct io_uring *ring)
 }
 
 static uint64_t
-encode_operation_op(mrb_state *mrb, void *ptr, uint8_t op)
+encode_operation_op(mrb_state *mrb, void *ptr, enum mrb_io_uring_op op)
 {
-    if (likely(can_use_high_bits)) {
-        return ((uintptr_t)ptr & 0x0000FFFFFFFFFFFFULL) | ((uint64_t)(op) << (64 - 8));
-    } else {
-        PtrAndInt *pai = mrb_malloc(mrb, sizeof(PtrAndInt));
-        pai->ptr = ptr;
-        pai->op = op;
-        return (uintptr_t)pai;
-    }
+  if (likely(can_use_high_bits)) {
+    return ((uintptr_t)ptr & 0x0000FFFFFFFFFFFFULL) | ((uint64_t)(op) << (64 - 8));
+  } else {
+    PtrAndInt *pai = mrb_malloc(mrb, sizeof(PtrAndInt));
+    pai->ptr = ptr;
+    pai->op = op;
+    return (uintptr_t)pai;
+  }
 }
 
 static void *
 decode_operation(uint64_t packed_value)
 {
-    if (likely(can_use_high_bits)) {
-        return (void *)(packed_value & 0x0000FFFFFFFFFFFFULL);
-    } else {
-        PtrAndInt *pai = (PtrAndInt *)packed_value;
-        return pai->ptr;
-    }
+  if (likely(can_use_high_bits)) {
+    return (void *)(packed_value & 0x0000FFFFFFFFFFFFULL);
+  } else {
+    PtrAndInt *pai = (PtrAndInt *)packed_value;
+    return pai->ptr;
+  }
 }
 
-static uint8_t
+static enum mrb_io_uring_op
 decode_op(uint64_t packed_value)
 {
-    if (likely(can_use_high_bits)) {
-        return (uint8_t)(packed_value >> (64 - 8));
-    } else {
-        PtrAndInt *pai = (PtrAndInt *)packed_value;
-        return pai->op;
-    }
+  if (likely(can_use_high_bits)) {
+    return (enum mrb_io_uring_op)(packed_value >> (64 - 8));
+  } else {
+    PtrAndInt *pai = (PtrAndInt *)packed_value;
+    return pai->op;
+  }
 }
 
 static mrb_value
@@ -159,7 +159,7 @@ mrb_io_uring_prep_socket(mrb_state *mrb, mrb_value self)
     mrb_symbol_value(mrb_intern_lit(mrb, "@type")), mrb_symbol_value(mrb_intern_lit(mrb, "socket"))
   };
   mrb_value operation = mrb_obj_new(mrb, mrb_class_get_under(mrb, mrb_class(mrb, self), "Operation"), NELEMS(argv), argv);
-  uint64_t encoded_operation = encode_operation_op(mrb, mrb_ptr(operation), IORING_OP_SOCKET);
+  uint64_t encoded_operation = encode_operation_op(mrb, mrb_ptr(operation), MRB_IORING_OP_SOCKET);
   mrb_data_init(operation, &encoded_operation, &mrb_io_uring_operation_type);
 
   mrb_io_uring_t *mrb_io_uring = DATA_PTR(self);
@@ -185,7 +185,7 @@ mrb_io_uring_prep_accept(mrb_state *mrb, mrb_value self)
     mrb_symbol_value(mrb_intern_lit(mrb, "@sock")), sock
   };
   mrb_value operation = mrb_obj_new(mrb, mrb_class_get_under(mrb, mrb_class(mrb, self), "Operation"), NELEMS(argv), argv);
-  uint64_t encoded_operation = encode_operation_op(mrb, mrb_ptr(operation), IORING_OP_ACCEPT);
+  uint64_t encoded_operation = encode_operation_op(mrb, mrb_ptr(operation), MRB_IORING_OP_ACCEPT);
   mrb_data_init(operation, &encoded_operation, &mrb_io_uring_operation_type);
 
   mrb_io_uring_t *mrb_io_uring = DATA_PTR(self);
@@ -214,7 +214,7 @@ mrb_io_uring_prep_multishot_accept(mrb_state *mrb, mrb_value self)
     mrb_symbol_value(mrb_intern_lit(mrb, "@sock")), sock
   };
   mrb_value operation = mrb_obj_new(mrb, mrb_class_get_under(mrb, mrb_class(mrb, self), "Operation"), NELEMS(argv), argv);
-  uint64_t encoded_operation = encode_operation_op(mrb, mrb_ptr(operation), IORING_OP_ACCEPT);
+  uint64_t encoded_operation = encode_operation_op(mrb, mrb_ptr(operation), MRB_IORING_OP_ACCEPT);
   mrb_data_init(operation, &encoded_operation, &mrb_io_uring_operation_type);
 
   mrb_io_uring_t *mrb_io_uring = DATA_PTR(self);
@@ -244,7 +244,7 @@ mrb_io_uring_prep_connect(mrb_state *mrb, mrb_value self)
     mrb_symbol_value(mrb_intern_lit(mrb, "@addrinfo")), addrinfo
   };
   mrb_value operation = mrb_obj_new(mrb, mrb_class_get_under(mrb, mrb_class(mrb, self), "Operation"), NELEMS(argv), argv);
-  uint64_t encoded_operation = encode_operation_op(mrb, mrb_ptr(operation), IORING_OP_CONNECT);
+  uint64_t encoded_operation = encode_operation_op(mrb, mrb_ptr(operation), MRB_IORING_OP_CONNECT);
   mrb_data_init(operation, &encoded_operation, &mrb_io_uring_operation_type);
 
   mrb_io_uring_t *mrb_io_uring = DATA_PTR(self);
@@ -283,7 +283,7 @@ mrb_io_uring_prep_recv(mrb_state *mrb, mrb_value self)
     mrb_symbol_value(mrb_intern_lit(mrb, "@buf")),  buf
   };
   mrb_value operation = mrb_obj_new(mrb, mrb_class_get_under(mrb, mrb_class(mrb, self), "Operation"), NELEMS(argv), argv);
-  uint64_t encoded_operation = encode_operation_op(mrb, mrb_ptr(operation), IORING_OP_RECV);
+  uint64_t encoded_operation = encode_operation_op(mrb, mrb_ptr(operation), MRB_IORING_OP_RECV);
   mrb_data_init(operation, &encoded_operation, &mrb_io_uring_operation_type);
 
   mrb_io_uring_t *mrb_io_uring = DATA_PTR(self);
@@ -312,7 +312,7 @@ mrb_io_uring_prep_splice(mrb_state *mrb, mrb_value self)
     mrb_symbol_value(mrb_intern_lit(mrb, "@sock")), mrb_assoc_new(mrb, fd_in, fd_out)
   };
   mrb_value operation = mrb_obj_new(mrb, mrb_class_get_under(mrb, mrb_class(mrb, self), "Operation"), NELEMS(argv), argv);
-  uint64_t encoded_operation = encode_operation_op(mrb, mrb_ptr(operation), IORING_OP_SPLICE);
+  uint64_t encoded_operation = encode_operation_op(mrb, mrb_ptr(operation), MRB_IORING_OP_SPLICE);
   mrb_data_init(operation, &encoded_operation, &mrb_io_uring_operation_type);
 
   mrb_io_uring_t *mrb_io_uring = DATA_PTR(self);
@@ -345,7 +345,7 @@ mrb_io_uring_prep_send(mrb_state *mrb, mrb_value self)
   mrb_obj_freeze(mrb, buf);
 
   mrb_value operation = mrb_obj_new(mrb, mrb_class_get_under(mrb, mrb_class(mrb, self), "Operation"), NELEMS(argv), argv);
-  uint64_t encoded_operation = encode_operation_op(mrb, mrb_ptr(operation), IORING_OP_SEND);
+  uint64_t encoded_operation = encode_operation_op(mrb, mrb_ptr(operation), MRB_IORING_OP_SEND);
   mrb_data_init(operation, &encoded_operation, &mrb_io_uring_operation_type);
 
   mrb_io_uring_t *mrb_io_uring = DATA_PTR(self);
@@ -374,7 +374,7 @@ mrb_io_uring_prep_shutdown(mrb_state *mrb, mrb_value self)
     mrb_symbol_value(mrb_intern_lit(mrb, "@sock")), sock
   };
   mrb_value operation = mrb_obj_new(mrb, mrb_class_get_under(mrb, mrb_class(mrb, self), "Operation"), NELEMS(argv), argv);
-  uint64_t encoded_operation = encode_operation_op(mrb, mrb_ptr(operation), IORING_OP_SHUTDOWN);
+  uint64_t encoded_operation = encode_operation_op(mrb, mrb_ptr(operation), MRB_IORING_OP_SHUTDOWN);
   mrb_data_init(operation, &encoded_operation, &mrb_io_uring_operation_type);
 
   mrb_io_uring_t *mrb_io_uring = DATA_PTR(self);
@@ -400,7 +400,7 @@ mrb_io_uring_prep_close(mrb_state *mrb, mrb_value self)
     mrb_symbol_value(mrb_intern_lit(mrb, "@sock")), sock
   };
   mrb_value operation = mrb_obj_new(mrb, mrb_class_get_under(mrb, mrb_class(mrb, self), "Operation"), NELEMS(argv), argv);
-  uint64_t encoded_operation = encode_operation_op(mrb, mrb_ptr(operation), IORING_OP_CLOSE);
+  uint64_t encoded_operation = encode_operation_op(mrb, mrb_ptr(operation), MRB_IORING_OP_CLOSE);
   mrb_data_init(operation, &encoded_operation, &mrb_io_uring_operation_type);
 
   mrb_io_uring_t *mrb_io_uring = DATA_PTR(self);
@@ -427,7 +427,7 @@ mrb_io_uring_prep_poll_add(mrb_state *mrb, mrb_value self)
     mrb_symbol_value(mrb_intern_lit(mrb, "@poll_mask")),  mrb_int_value(mrb, poll_mask)
   };
   mrb_value operation = mrb_obj_new(mrb, mrb_class_get_under(mrb, mrb_class(mrb, self), "Operation"), NELEMS(argv), argv);
-  uint64_t encoded_operation = encode_operation_op(mrb, mrb_ptr(operation), IORING_OP_POLL_ADD);
+  uint64_t encoded_operation = encode_operation_op(mrb, mrb_ptr(operation), MRB_IORING_OP_POLL_ADD);
   mrb_data_init(operation, &encoded_operation, &mrb_io_uring_operation_type);
 
   mrb_io_uring_t *mrb_io_uring = DATA_PTR(self);
@@ -457,11 +457,7 @@ mrb_io_uring_prep_poll_multishot(mrb_state *mrb, mrb_value self)
   };
 
   mrb_value operation = mrb_obj_new(mrb, mrb_class_get_under(mrb, mrb_class(mrb, self), "Operation"), NELEMS(argv), argv);
-  uint8_t op = IORING_OP_POLL_REMOVE;
-  if (poll_mask) {
-    op = IORING_OP_POLL_ADD;
-  }
-  uint64_t encoded_operation = encode_operation_op(mrb, mrb_ptr(operation), op);
+  uint64_t encoded_operation = encode_operation_op(mrb, mrb_ptr(operation), MRB_IORING_OP_POLL_MULTISHOT);
   mrb_data_init(operation, &encoded_operation, &mrb_io_uring_operation_type);
 
   mrb_io_uring_t *mrb_io_uring = DATA_PTR(self);
@@ -494,11 +490,8 @@ mrb_io_uring_prep_poll_update(mrb_state *mrb, mrb_value self)
   };
   mrb_value new_operation;
   new_operation = mrb_obj_new(mrb, mrb_class_get_under(mrb, mrb_class(mrb, self), "Operation"), NELEMS(argv), argv);
-  uint8_t op = IORING_OP_POLL_REMOVE;
-  if (poll_mask) {
-    op = IORING_OP_POLL_ADD;
-  }
-  uint64_t encoded_operation = encode_operation_op(mrb, mrb_ptr(new_operation), op);
+
+  uint64_t encoded_operation = encode_operation_op(mrb, mrb_ptr(new_operation), MRB_IORING_OP_POLL_UPDATE);
   mrb_data_init(new_operation, &encoded_operation, &mrb_io_uring_operation_type);
 
   mrb_io_uring_t *mrb_io_uring = DATA_PTR(self);
@@ -536,7 +529,7 @@ mrb_io_uring_prep_openat2(mrb_state *mrb, mrb_value self)
     mrb_symbol_value(mrb_intern_lit(mrb, "@open_how")),   open_how
   };
   mrb_value operation = mrb_obj_new(mrb, mrb_class_get_under(mrb, mrb_class(mrb, self), "Operation"), NELEMS(argv), argv);
-  uint64_t encoded_operation = encode_operation_op(mrb, mrb_ptr(operation), IORING_OP_OPENAT2);
+  uint64_t encoded_operation = encode_operation_op(mrb, mrb_ptr(operation), MRB_IORING_OP_OPENAT2);
   mrb_data_init(operation, &encoded_operation, &mrb_io_uring_operation_type);
 
   mrb_io_uring_t *mrb_io_uring = DATA_PTR(self);
@@ -577,7 +570,7 @@ mrb_io_uring_prep_read(mrb_state *mrb, mrb_value self)
     mrb_symbol_value(mrb_intern_lit(mrb, "@buf")),  buf
   };
   mrb_value operation = mrb_obj_new(mrb, mrb_class_get_under(mrb, mrb_class(mrb, self), "Operation"), NELEMS(argv), argv);
-  uint64_t encoded_operation = encode_operation_op(mrb, mrb_ptr(operation), IORING_OP_READ);
+  uint64_t encoded_operation = encode_operation_op(mrb, mrb_ptr(operation), MRB_IORING_OP_READ);
   mrb_data_init(operation, &encoded_operation, &mrb_io_uring_operation_type);
 
   mrb_io_uring_t *mrb_io_uring = DATA_PTR(self);
@@ -613,7 +606,7 @@ mrb_io_uring_prep_read_fixed(mrb_state *mrb, mrb_value self)
     mrb_symbol_value(mrb_intern_lit(mrb, "@buf")),  buffer_t.buffer,
   };
   mrb_value operation = mrb_obj_new(mrb, mrb_class_get_under(mrb, mrb_class(mrb, self), "Operation"), NELEMS(argv), argv);
-  uint64_t encoded_operation = encode_operation_op(mrb, mrb_ptr(operation), IORING_OP_READ_FIXED);
+  uint64_t encoded_operation = encode_operation_op(mrb, mrb_ptr(operation), MRB_IORING_OP_READ_FIXED);
   mrb_data_init(operation, &encoded_operation, &mrb_io_uring_operation_type);
 
   struct io_uring_sqe *sqe = mrb_io_uring_get_sqe(mrb, &mrb_io_uring->ring);
@@ -645,7 +638,7 @@ mrb_io_uring_prep_write(mrb_state *mrb, mrb_value self)
   mrb_obj_freeze(mrb, buf);
 
   mrb_value operation = mrb_obj_new(mrb, mrb_class_get_under(mrb, mrb_class(mrb, self), "Operation"), NELEMS(argv), argv);
-  uint64_t encoded_operation = encode_operation_op(mrb, mrb_ptr(operation), IORING_OP_WRITE);
+  uint64_t encoded_operation = encode_operation_op(mrb, mrb_ptr(operation), MRB_IORING_OP_WRITE);
   mrb_data_init(operation, &encoded_operation, &mrb_io_uring_operation_type);
 
   mrb_io_uring_t *mrb_io_uring = DATA_PTR(self);
@@ -677,7 +670,7 @@ mrb_io_uring_prep_cancel(mrb_state *mrb, mrb_value self)
     mrb_symbol_value(mrb_intern_lit(mrb, "@operation")),  operation
   };
   mrb_value cancel_operation = mrb_obj_new(mrb, mrb_class_get_under(mrb, mrb_class(mrb, self), "Operation"), NELEMS(argv), argv);
-  uint64_t encoded_operation = encode_operation_op(mrb, mrb_ptr(operation), IORING_OP_ASYNC_CANCEL);
+  uint64_t encoded_operation = encode_operation_op(mrb, mrb_ptr(operation), MRB_IORING_OP_CANCEL);
   mrb_data_init(operation, &encoded_operation, &mrb_io_uring_operation_type);
 
   mrb_io_uring_t *mrb_io_uring = DATA_PTR(self);
@@ -701,27 +694,27 @@ mrb_io_uring_process_cqe(mrb_state *mrb, mrb_io_uring_t *mrb_io_uring, struct io
 
   if (likely(cqe->res >= 0)) {
     switch(decode_op(userdata)) {
-      case IORING_OP_ACCEPT:
-      case IORING_OP_SOCKET:
-        mrb_iv_set(mrb, operation, mrb_intern_lit(mrb, "@sock"), res);
-      break;
-      case IORING_OP_OPENAT2: {
-        mrb_iv_set(mrb, operation, mrb_intern_lit(mrb, "@file"), res);
-        mrb_value path = mrb_iv_get(mrb, operation, mrb_intern_lit(mrb, "@path"));
-        if (likely(mrb_string_p(path))) {
-          mrb_value path_was_frozen = mrb_iv_get(mrb, operation, mrb_intern_lit(mrb, "path_was_frozen"));
-          if (!mrb_bool(path_was_frozen)) {
-            MRB_UNSET_FROZEN_FLAG(mrb_basic_ptr((path)));
+      case MRB_IORING_OP_READ_FIXED: {
+        mrb_value buf = mrb_iv_get(mrb, operation, mrb_intern_lit(mrb, "@buf"));
+        if (likely(mrb_string_p(buf) && mrb_frozen_p(mrb_basic_ptr(buf)))) {
+          if (unlikely(mrb_nil_p(mrb_hash_get(mrb, mrb_io_uring->buffers, mrb_int_value(mrb, (intptr_t)mrb_ptr(buf)))))) {
+            mrb_raise(mrb, E_ARGUMENT_ERROR, "Wrong buffer given");
           }
+          RSTR_UNSET_SINGLE_BYTE_FLAG(mrb_str_ptr(buf));
+          RSTR_SET_LEN(mrb_str_ptr(buf), cqe->res);
         } else {
-          mrb_raise(mrb, E_TYPE_ERROR, "path is not a string");
+          mrb_raise(mrb, E_TYPE_ERROR, "buf is not a string, or not frozen");
         }
       } break;
-      case IORING_OP_READ:
-      case IORING_OP_RECV: {
+      case MRB_IORING_OP_ACCEPT:
+      case MRB_IORING_OP_SOCKET:
+        mrb_iv_set(mrb, operation, mrb_intern_lit(mrb, "@sock"), res);
+      break;
+      case MRB_IORING_OP_READ:
+      case MRB_IORING_OP_RECV: {
         mrb_value buf = mrb_iv_get(mrb, operation, mrb_intern_lit(mrb, "@buf"));
         if (likely(mrb_string_p(buf))) {
-          mrb_value check_buffer = mrb_hash_get(mrb, mrb_io_uring->buffers, buf);
+          mrb_value check_buffer = mrb_hash_get(mrb, mrb_io_uring->buffers, mrb_int_value(mrb, (intptr_t)mrb_ptr(buf)));
           if (unlikely(!mrb_nil_p(check_buffer))) {
             mrb_raise(mrb, E_FROZEN_ERROR, "can't modify frozen Buffer");
           }
@@ -731,19 +724,8 @@ mrb_io_uring_process_cqe(mrb_state *mrb, mrb_io_uring_t *mrb_io_uring, struct io
           mrb_raise(mrb, E_TYPE_ERROR, "buf is not a string");
         }
       } break;
-      case IORING_OP_READ_FIXED: {
-        mrb_value buf = mrb_iv_get(mrb, operation, mrb_intern_lit(mrb, "@buf"));
-        if (likely(mrb_string_p(buf) && mrb_frozen_p(mrb_basic_ptr(buf)))) {
-          if (unlikely(mrb_nil_p(mrb_hash_get(mrb, mrb_io_uring->buffers, buf)))) {
-            mrb_raise(mrb, E_ARGUMENT_ERROR, "Wrong buffer given");
-          }
-          RSTR_SET_LEN(mrb_str_ptr(buf), cqe->res);
-        } else {
-          mrb_raise(mrb, E_TYPE_ERROR, "buf is not a string, or not frozen");
-        }
-      } break;
-      case IORING_OP_WRITE:
-      case IORING_OP_SEND: {
+      case MRB_IORING_OP_WRITE:
+      case MRB_IORING_OP_SEND: {
         mrb_value buf = mrb_iv_get(mrb, operation, mrb_intern_lit(mrb, "@buf"));
         if (likely(mrb_string_p(buf))) {
           mrb_value buf_was_frozen = mrb_iv_get(mrb, operation, mrb_intern_lit(mrb, "buf_was_frozen"));
@@ -752,6 +734,18 @@ mrb_io_uring_process_cqe(mrb_state *mrb, mrb_io_uring_t *mrb_io_uring, struct io
           }
         } else {
           mrb_raise(mrb, E_TYPE_ERROR, "buf is not a string");
+        }
+      } break;
+      case MRB_IORING_OP_OPENAT2: {
+        mrb_iv_set(mrb, operation, mrb_intern_lit(mrb, "@file"), res);
+        mrb_value path = mrb_iv_get(mrb, operation, mrb_intern_lit(mrb, "@path"));
+        if (likely(mrb_string_p(path))) {
+          mrb_value path_was_frozen = mrb_iv_get(mrb, operation, mrb_intern_lit(mrb, "path_was_frozen"));
+          if (!mrb_bool(path_was_frozen)) {
+            MRB_UNSET_FROZEN_FLAG(mrb_basic_ptr((path)));
+          }
+        } else {
+          mrb_raise(mrb, E_TYPE_ERROR, "path is not a string");
         }
       } break;
       default:
@@ -769,8 +763,8 @@ static void
 mrb_io_uring_return_used_buffer(mrb_state *mrb, mrb_io_uring_t *mrb_io_uring, mrb_value operation)
 {
   mrb_value buf = mrb_iv_get(mrb, operation, mrb_intern_lit(mrb, "@buf"));
-  mrb_value index_val = mrb_hash_get(mrb, mrb_io_uring->buffers, buf);
-  if (unlikely(mrb_nil_p(index_val))) {
+  mrb_value index_val = mrb_hash_get(mrb, mrb_io_uring->buffers, mrb_int_value(mrb, (intptr_t)mrb_ptr(buf)));
+  if (unlikely(!mrb_integer_p(index_val))) {
     mrb_raise(mrb, E_TYPE_ERROR, "buf not found");
   }
 
@@ -784,7 +778,7 @@ mrb_io_uring_return_used_buffer(mrb_state *mrb, mrb_io_uring_t *mrb_io_uring, mr
 }
 
 static mrb_value
-mrb_io_uring_iterate_over_cqes(mrb_state *mrb, int rc, mrb_io_uring_t *mrb_io_uring, mrb_value block, struct io_uring_cqe *cqe)
+mrb_io_uring_iterate_over_cqes(mrb_state *mrb, mrb_io_uring_t *mrb_io_uring, mrb_value block, struct io_uring_cqe *cqe, int rc)
 {
   struct mrb_jmpbuf* prev_jmp = mrb->jmp;
   struct mrb_jmpbuf c_jmp;
@@ -793,13 +787,13 @@ mrb_io_uring_iterate_over_cqes(mrb_state *mrb, int rc, mrb_io_uring_t *mrb_io_ur
   MRB_TRY(&c_jmp)
   {
     mrb->jmp = &c_jmp;
-    int arena_index = mrb_gc_arena_save(mrb);
     unsigned head;
+    int arena_index = mrb_gc_arena_save(mrb);
 
     io_uring_for_each_cqe(&mrb_io_uring->ring, head, cqe) {
       mrb_value operation = mrb_io_uring_process_cqe(mrb, mrb_io_uring, cqe);
       mrb_yield(mrb, block, operation);
-      if (decode_op(io_uring_cqe_get_data64(cqe)) == IORING_OP_READ_FIXED)  {
+      if (decode_op(io_uring_cqe_get_data64(cqe)) == MRB_IORING_OP_READ_FIXED)  {
         mrb_io_uring_return_used_buffer(mrb, mrb_io_uring, operation);
       }
       if (!(cqe->flags & IORING_CQE_F_MORE)) {
@@ -831,8 +825,9 @@ mrb_io_uring_submit_and_wait_timeout(mrb_state *mrb, mrb_value self)
   mrb_float timeout = -1.0;
   mrb_value block = mrb_nil_value();
   mrb_get_args(mrb, "|if&", &wait_nr, &timeout, &block);
-  int rc;
+
   struct io_uring_cqe *cqe = NULL;
+  int rc;
   if (timeout >= 0) {
     timeout += 1e-17; // we are adding this so ts can't become negative.
     struct __kernel_timespec ts = {
@@ -851,7 +846,7 @@ mrb_io_uring_submit_and_wait_timeout(mrb_state *mrb, mrb_value self)
     mrb_sys_fail(mrb, "io_uring_submit_and_wait_timeout");
   }
 
-  return mrb_io_uring_iterate_over_cqes(mrb, rc, mrb_io_uring, block, cqe);
+  return mrb_io_uring_iterate_over_cqes(mrb, mrb_io_uring, block, cqe, rc);
 }
 
 static __u64
@@ -869,7 +864,9 @@ mrb_io_uring_parse_flags_string(mrb_state *mrb, mrb_value flags_val)
   mrb_bool append_mode = FALSE;
 
   while (*flags_str) {
-    if (*flags_str == '+') {
+    char flag = *flags_str++;
+
+    if (flag == '+') {
       if (unlikely(seen_plus)) {
         mrb_raise(mrb, E_ARGUMENT_ERROR, "'+' must be at the end with no characters following, and only once");
       }
@@ -878,20 +875,24 @@ mrb_io_uring_parse_flags_string(mrb_state *mrb, mrb_value flags_val)
       mrb_raise(mrb, E_ARGUMENT_ERROR, "'+' must be at the end with no characters following");
     }
 
-    switch (*flags_str++) {
-      case 'r':
-        if (unlikely(read_mode || write_mode || append_mode)) {
-          mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid combination of flags");
+    switch (flag) {
+      case '+':
+        if (unlikely(!(read_mode || write_mode || append_mode))) {
+          mrb_raise(mrb, E_ARGUMENT_ERROR, "'+' must follow 'r', 'w', or 'a'");
         }
-        read_mode = TRUE;
-        flags |= O_RDONLY;
+        flags = (flags & ~O_ACCMODE) | O_RDWR;
         break;
-      case 'w':
-        if (unlikely(read_mode || write_mode || append_mode)) {
-          mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid combination of flags");
+      case 'D':
+        if (unlikely(flags & O_DIRECTORY)) {
+          mrb_raise(mrb, E_ARGUMENT_ERROR, "flag 'D' specified more than once");
         }
-        write_mode = TRUE;
-        flags |= O_WRONLY | O_CREAT | O_TRUNC;
+        flags |= O_DIRECTORY;
+        break;
+      case 'P':
+        if (unlikely(flags & O_PATH)) {
+          mrb_raise(mrb, E_ARGUMENT_ERROR, "flag 'P' specified more than once");
+        }
+        flags |= O_PATH;
         break;
       case 'a':
         if (unlikely(read_mode || write_mode || append_mode)) {
@@ -900,35 +901,17 @@ mrb_io_uring_parse_flags_string(mrb_state *mrb, mrb_value flags_val)
         append_mode = TRUE;
         flags |= O_WRONLY | O_CREAT | O_APPEND;
         break;
-      case '+':
-        if (unlikely(!(read_mode || write_mode || append_mode))) {
-          mrb_raise(mrb, E_ARGUMENT_ERROR, "'+' must follow 'r', 'w', or 'a'");
-        }
-        flags = (flags & ~O_ACCMODE) | O_RDWR;
-        break;
-      case 'e':
-        if (unlikely(flags & O_CLOEXEC)) {
-          mrb_raise(mrb, E_ARGUMENT_ERROR, "flag 'e' specified more than once");
-        }
-        flags |= O_CLOEXEC;
-        break;
-      case 's':
-        if (unlikely(flags & O_SYNC)) {
-          mrb_raise(mrb, E_ARGUMENT_ERROR, "flag 's' specified more than once");
-        }
-        flags |= O_SYNC;
-        break;
       case 'd':
         if (unlikely(flags & O_DIRECT)) {
           mrb_raise(mrb, E_ARGUMENT_ERROR, "flag 'd' specified more than once");
         }
         flags |= O_DIRECT;
         break;
-      case 't':
-        if (unlikely(flags & O_TMPFILE)) {
-          mrb_raise(mrb, E_ARGUMENT_ERROR, "flag 't' specified more than once");
+      case 'e':
+        if (unlikely(flags & O_CLOEXEC)) {
+          mrb_raise(mrb, E_ARGUMENT_ERROR, "flag 'e' specified more than once");
         }
-        flags |= O_TMPFILE;
+        flags |= O_CLOEXEC;
         break;
       case 'n':
         switch (*flags_str++) {
@@ -937,6 +920,12 @@ mrb_io_uring_parse_flags_string(mrb_state *mrb, mrb_value flags_val)
               mrb_raise(mrb, E_ARGUMENT_ERROR, "flag 'na' specified more than once");
             }
             flags |= O_NOATIME;
+            break;
+          case 'b':
+            if (unlikely(flags & O_NONBLOCK)) {
+              mrb_raise(mrb, E_ARGUMENT_ERROR, "flag 'nb' specified more than once");
+            }
+            flags |= O_NONBLOCK;
             break;
           case 'c':
             if (unlikely(flags & O_NOCTTY)) {
@@ -950,27 +939,35 @@ mrb_io_uring_parse_flags_string(mrb_state *mrb, mrb_value flags_val)
             }
             flags |= O_NOFOLLOW;
             break;
-          case 'b':
-            if (unlikely(flags & O_NONBLOCK)) {
-              mrb_raise(mrb, E_ARGUMENT_ERROR, "flag 'nb' specified more than once");
-            }
-            flags |= O_NONBLOCK;
-            break;
           default:
             mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid flags string");
         }
         break;
-      case 'D':
-        if (unlikely(flags & O_DIRECTORY)) {
-          mrb_raise(mrb, E_ARGUMENT_ERROR, "flag 'D' specified more than once");
+      case 'r':
+        if (unlikely(read_mode || write_mode || append_mode)) {
+          mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid combination of flags");
         }
-        flags |= O_DIRECTORY;
+        read_mode = TRUE;
+        flags |= O_RDONLY;
         break;
-      case 'P':
-        if (unlikely(flags & O_PATH)) {
-          mrb_raise(mrb, E_ARGUMENT_ERROR, "flag 'P' specified more than once");
+      case 's':
+        if (unlikely(flags & O_SYNC)) {
+          mrb_raise(mrb, E_ARGUMENT_ERROR, "flag 's' specified more than once");
         }
-        flags |= O_PATH;
+        flags |= O_SYNC;
+        break;
+      case 't':
+        if (unlikely(flags & O_TMPFILE)) {
+          mrb_raise(mrb, E_ARGUMENT_ERROR, "flag 't' specified more than once");
+        }
+        flags |= O_TMPFILE;
+        break;
+      case 'w':
+        if (unlikely(read_mode || write_mode || append_mode)) {
+          mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid combination of flags");
+        }
+        write_mode = TRUE;
+        flags |= O_WRONLY | O_CREAT | O_TRUNC;
         break;
       default:
         mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid flags string");
@@ -991,18 +988,14 @@ mrb_io_uring_parse_resolve_string(mrb_state *mrb, mrb_value resolve)
   __u64 resolve_flags = 0;
 
   while (*resolve_str) {
-    switch (*resolve_str++) {
-      case 'L':
-        if (unlikely(resolve_flags & RESOLVE_NO_SYMLINKS)) {
-          mrb_raise(mrb, E_ARGUMENT_ERROR, "flag 'L' specified more than once");
+    char flag = *resolve_str++;
+
+    switch (flag) {
+      case 'B':
+        if (unlikely(resolve_flags & RESOLVE_BENEATH)) {
+          mrb_raise(mrb, E_ARGUMENT_ERROR, "flag 'B' specified more than once");
         }
-        resolve_flags |= RESOLVE_NO_SYMLINKS;
-        break;
-      case 'X':
-        if (unlikely(resolve_flags & RESOLVE_NO_XDEV)) {
-          mrb_raise(mrb, E_ARGUMENT_ERROR, "flag 'X' specified more than once");
-        }
-        resolve_flags |= RESOLVE_NO_XDEV;
+        resolve_flags |= RESOLVE_BENEATH;
         break;
       case 'C':
         if (unlikely(resolve_flags & RESOLVE_CACHED)) {
@@ -1010,17 +1003,23 @@ mrb_io_uring_parse_resolve_string(mrb_state *mrb, mrb_value resolve)
         }
         resolve_flags |= RESOLVE_CACHED;
         break;
-      case 'B':
-        if (unlikely(resolve_flags & RESOLVE_BENEATH)) {
-          mrb_raise(mrb, E_ARGUMENT_ERROR, "flag 'B' specified more than once");
+      case 'L':
+        if (unlikely(resolve_flags & RESOLVE_NO_SYMLINKS)) {
+          mrb_raise(mrb, E_ARGUMENT_ERROR, "flag 'L' specified more than once");
         }
-        resolve_flags |= RESOLVE_BENEATH;
+        resolve_flags |= RESOLVE_NO_SYMLINKS;
         break;
       case 'R':
         if (unlikely(resolve_flags & RESOLVE_IN_ROOT)) {
           mrb_raise(mrb, E_ARGUMENT_ERROR, "flag 'R' specified more than once");
         }
         resolve_flags |= RESOLVE_IN_ROOT;
+        break;
+      case 'X':
+        if (unlikely(resolve_flags & RESOLVE_NO_XDEV)) {
+          mrb_raise(mrb, E_ARGUMENT_ERROR, "flag 'X' specified more than once");
+        }
+        resolve_flags |= RESOLVE_NO_XDEV;
         break;
       default:
         mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid resolve string");
@@ -1085,16 +1084,16 @@ mrb_io_uring_operation_class_init(mrb_state *mrb, mrb_value self)
 static const char *unsupported_socket_family_name(int family) {
   switch (family) {
     case AF_LOCAL: return "AF_LOCAL (Local Communication)";
-    case AF_PACKET: return "AF_PACKET (Low-level Packet Interface)";
-    case AF_NETLINK: return "AF_NETLINK (Kernel/User-space Communication)";
-    case AF_BLUETOOTH: return "AF_BLUETOOTH (Bluetooth)";
-    case AF_VSOCK: return "AF_VSOCK (VM Communication)";
-    case AF_X25: return "AF_X25 (X.25 Protocol)";
     case AF_AX25: return "AF_AX25 (Amateur Radio X.25)";
     case AF_IPX: return "AF_IPX (IPX Protocol)";
     case AF_APPLETALK: return "AF_APPLETALK (AppleTalk Protocol)";
+    case AF_NETLINK: return "AF_NETLINK (Kernel/User-space Communication)";
+    case AF_PACKET: return "AF_PACKET (Low-level Packet Interface)";
     case AF_ATMPVC: return "AF_ATMPVC (ATM PVCs)";
+    case AF_X25: return "AF_X25 (X.25 Protocol)";
     case AF_ALG: return "AF_ALG (Kernel Crypto API)";
+    case AF_VSOCK: return "AF_VSOCK (VM Communication)";
+    case AF_BLUETOOTH: return "AF_BLUETOOTH (Bluetooth)";
     default: return "Unknown";
   }
 }
@@ -1274,6 +1273,9 @@ initialize_can_use_buffers_once()
 void
 mrb_mruby_io_uring_gem_init(mrb_state* mrb)
 {
+  if(sizeof(mrb_int) < sizeof(intptr_t)) {
+    mrb_bug(mrb, "increase mruby mrb_int size to match at least the size of intptr_t");
+  }
   pthread_mutex_lock(&mutex);
   if (gem_load_count++ == 0) {
     initialize_high_bits_check_once(mrb);
@@ -1354,7 +1356,7 @@ mrb_mruby_io_uring_gem_final(mrb_state* mrb)
   pthread_mutex_lock(&mutex);
 
   if (gem_load_count > 0 && --gem_load_count == 0) {
-    free(precomputed_bins);
+    mrb_free(mrb, precomputed_bins);
     precomputed_bins = NULL;
   }
 

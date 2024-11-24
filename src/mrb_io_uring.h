@@ -34,6 +34,7 @@ typedef struct {
   struct io_uring_params params;
   mrb_value sqes;
   mrb_value buffers;
+  mrb_int num_buffers;
   mrb_value free_list;
 } mrb_io_uring_t;
 
@@ -54,10 +55,29 @@ typedef struct {
   mrb_value buffer;
 } mrb_io_uring_buffer_t;
 
+enum mrb_io_uring_op {
+  MRB_IORING_OP_READ_FIXED,
+  MRB_IORING_OP_ACCEPT,
+  MRB_IORING_OP_SOCKET,
+  MRB_IORING_OP_READ,
+  MRB_IORING_OP_RECV,
+  MRB_IORING_OP_WRITE,
+  MRB_IORING_OP_SEND,
+  MRB_IORING_OP_OPENAT2,
+  MRB_IORING_OP_CONNECT,
+  MRB_IORING_OP_SPLICE,
+  MRB_IORING_OP_SHUTDOWN,
+  MRB_IORING_OP_CLOSE,
+  MRB_IORING_OP_POLL_ADD,
+  MRB_IORING_OP_POLL_MULTISHOT,
+  MRB_IORING_OP_POLL_UPDATE,
+  MRB_IORING_OP_CANCEL
+};
+
 static int can_use_high_bits = 0;
 typedef struct {
     void *ptr;
-    uint8_t op;
+    enum mrb_io_uring_op op;
 } PtrAndInt;
 
 static void
