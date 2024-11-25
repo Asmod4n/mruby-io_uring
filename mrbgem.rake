@@ -9,7 +9,7 @@ MRuby::Gem::Specification.new('mruby-io-uring') do |spec|
   spec.add_dependency 'mruby-socket'
   spec.add_dependency 'mruby-errno'
   spec.add_dependency 'mruby-signal'
-  unless File.exists? "#{spec.build_dir}/build/lib/liburing.a"
+  unless File.file? "#{spec.build_dir}/build/lib/liburing.a"
     command = "mkdir -p #{spec.build_dir}/build && cd #{spec.dir}/deps/liburing/ && ./configure "
     if spec.build.debug_enabled?
       command << "--enable-sanitizer"
