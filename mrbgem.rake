@@ -1,7 +1,10 @@
+require_relative 'mrblib/version.rb'
+
 MRuby::Gem::Specification.new('mruby-io-uring') do |spec|
   spec.license = 'Apache-2.0'
   spec.author  = 'Hendrik Beskow'
   spec.summary = 'io_uring for mruby'
+  spec.version = IO::Uring::VERSION
   spec.add_dependency 'mruby-io'
   spec.add_dependency 'mruby-socket'
   spec.add_dependency 'mruby-errno'

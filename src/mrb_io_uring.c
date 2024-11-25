@@ -1065,8 +1065,6 @@ mrb_io_uring_operation_class_init(mrb_state *mrb, mrb_value self)
     mrb_raise(mrb, E_ARGUMENT_ERROR, "expecting an even number of arguments; and at least four");
   }
 
-  DATA_TYPE(self) = &mrb_io_uring_operation_type;
-
   for (mrb_int i = 0; i < argc;) {
     mrb_value key = argv[i++];
     mrb_value value = argv[i++];
@@ -1087,13 +1085,13 @@ static const char *unsupported_socket_family_name(int family) {
     case AF_AX25: return "AF_AX25 (Amateur Radio X.25)";
     case AF_IPX: return "AF_IPX (IPX Protocol)";
     case AF_APPLETALK: return "AF_APPLETALK (AppleTalk Protocol)";
-    case AF_NETLINK: return "AF_NETLINK (Kernel/User-space Communication)";
-    case AF_PACKET: return "AF_PACKET (Low-level Packet Interface)";
     case AF_ATMPVC: return "AF_ATMPVC (ATM PVCs)";
     case AF_X25: return "AF_X25 (X.25 Protocol)";
+    case AF_NETLINK: return "AF_NETLINK (Kernel/User-space Communication)";
+    case AF_PACKET: return "AF_PACKET (Low-level Packet Interface)";
+    case AF_BLUETOOTH: return "AF_BLUETOOTH (Bluetooth)";
     case AF_ALG: return "AF_ALG (Kernel Crypto API)";
     case AF_VSOCK: return "AF_VSOCK (VM Communication)";
-    case AF_BLUETOOTH: return "AF_BLUETOOTH (Bluetooth)";
     default: return "Unknown";
   }
 }
@@ -1133,6 +1131,9 @@ mrb_io_uring_operation_to_io(mrb_state *mrb, mrb_value self)
     }
 
     switch (addr.ss_family) {
+      case AF_UNIX:
+        socket_class = optval ? mrb_class_get(mrb, "UNIXServer") : mrb_class_get(mrb, "UNIXSocket");
+        break;
       case AF_INET:
       case AF_INET6:
         if (optval) {
@@ -1155,9 +1156,6 @@ mrb_io_uring_operation_to_io(mrb_state *mrb, mrb_value self)
             }
           }
         }
-        break;
-      case AF_UNIX:
-        socket_class = optval ? mrb_class_get(mrb, "UNIXServer") : mrb_class_get(mrb, "UNIXSocket");
         break;
       default: {
         const char *family_name = unsupported_socket_family_name(addr.ss_family);
@@ -1254,6 +1252,7 @@ initialize_size_bins_once(mrb_state *mrb)
     mrb_exc_raise(mrb, mrb_obj_value(mrb->nomem_err));
   }
 }
+
 
 static void
 initialize_can_use_buffers_once()
