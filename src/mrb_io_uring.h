@@ -17,8 +17,8 @@
 #include <sys/poll.h>
 #include <mruby/throw.h>
 #include <mruby/ext/io.h>
-#include <stdlib.h>
 #include <sys/param.h>
+#include <stdlib.h>
 
 #ifndef NSEC_PER_SEC
 #define NSEC_PER_SEC 1000000000
@@ -33,8 +33,8 @@ typedef struct {
   struct io_uring ring;
   struct io_uring_params params;
   mrb_value sqes;
+  mrb_int fixed_buffer_size;
   mrb_value buffers;
-  mrb_int num_buffers;
   mrb_value free_list;
 } mrb_io_uring_t;
 
@@ -51,7 +51,6 @@ static const struct mrb_data_type mrb_io_uring_queue_type = {
 
 typedef struct {
   mrb_int index;
-  mrb_value index_val;
   mrb_value buffer;
 } mrb_io_uring_buffer_t;
 
@@ -93,10 +92,8 @@ static const struct mrb_data_type mrb_io_uring_open_how_type = {
   "$i_mrb_io_uring_open_how_type", mrb_free
 };
 
-static long page_size;
-static size_t *precomputed_bins = NULL;
+static long page_size = 0;
 static size_t gem_load_count = 0;
 static pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 static mrb_bool can_use_buffers = FALSE;
 #define MRB_IORING_DEFAULT_FIXED_BUFFER_SIZE 131072
-#define MAX_BUFFER_SIZE (1 << 30) // Taken from the io_uring man pages: registered buffers musn't be larger than 1 GB.
