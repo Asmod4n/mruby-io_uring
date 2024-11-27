@@ -1,5 +1,5 @@
 #include "mrb_io_uring.h"
-#include "mruby/boxing_word.h"
+#include "mruby/value.h"
 
 static mrb_value
 mrb_io_uring_queue_init_params(mrb_state *mrb, mrb_value self)
@@ -840,6 +840,12 @@ mrb_io_uring_submit_and_wait_timeout(mrb_state *mrb, mrb_value self)
   mrb_float timeout = -1.0;
   mrb_value block = mrb_nil_value();
   mrb_get_args(mrb, "|if&", &wait_nr, &timeout, &block);
+  if(unlikely(mrb_nil_p(block))) {
+    mrb_raise(mrb, E_ARGUMENT_ERROR, "no block given");
+  }
+  if(unlikely(mrb_type(block) != MRB_TT_PROC)) {
+    mrb_raise(mrb, E_TYPE_ERROR, "not a block");
+  }
 
   struct io_uring_cqe *cqe = NULL;
   int rc;
@@ -1082,13 +1088,11 @@ mrb_io_uring_operation_class_init(mrb_state *mrb, mrb_value self)
 
   for (mrb_int i = 0; i < argc;) {
     mrb_value key = argv[i++];
-    mrb_value value = argv[i++];
-
     if (unlikely(!mrb_symbol_p(key))) {
       mrb_raise(mrb, E_TYPE_ERROR, "expected symbol for key");
     }
 
-    mrb_iv_set(mrb, self, mrb_symbol(key), value);
+    mrb_iv_set(mrb, self, mrb_symbol(key), argv[i++]);
   }
 
   return self;
@@ -1164,7 +1168,6 @@ mrb_io_uring_operation_to_io(mrb_state *mrb, mrb_value self)
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid @sock or @file descriptor");
   }
 
-  return mrb_nil_value();  // Should not reach here
 }
 
 static mrb_value
@@ -1220,7 +1223,8 @@ void
 mrb_mruby_io_uring_gem_init(mrb_state* mrb)
 {
   pthread_mutex_lock(&mutex);
-  if (gem_load_count++ == 0) {
+  if (init_once_done == FALSE) {
+    init_once_done = TRUE;
     initialize_can_use_buffers_once();
     if (can_use_buffers) {
       page_size = sysconf(_SC_PAGESIZE);
@@ -1262,16 +1266,16 @@ if (can_use_buffers) {
   mrb_define_const (mrb, io_uring_class, "ASYNC_CANCEL_FD_FIXED",   mrb_fixnum_value(IORING_ASYNC_CANCEL_FD_FIXED));
   mrb_define_const (mrb, io_uring_class, "POLL_ADD_MULTI",          mrb_fixnum_value(IORING_POLL_ADD_MULTI));
   mrb_define_const (mrb, io_uring_class, "POLL_UPDATE_EVENTS",      mrb_fixnum_value(IORING_POLL_UPDATE_EVENTS));
-  mrb_define_const (mrb, io_uring_class, "POLLERR", mrb_fixnum_value(POLLERR));
-  mrb_define_const (mrb, io_uring_class, "POLLHUP", mrb_fixnum_value(POLLHUP));
-  mrb_define_const (mrb, io_uring_class, "POLLIN",  mrb_fixnum_value(POLLIN));
-  mrb_define_const (mrb, io_uring_class, "POLLNVAL",mrb_fixnum_value(POLLNVAL));
-  mrb_define_const (mrb, io_uring_class, "POLLOUT", mrb_fixnum_value(POLLOUT));
-  mrb_define_const (mrb, io_uring_class, "POLLPRI", mrb_fixnum_value(POLLPRI));
-  mrb_define_const (mrb, io_uring_class, "SHUT_RD", mrb_fixnum_value(SHUT_RD));
-  mrb_define_const (mrb, io_uring_class, "SHUT_WR", mrb_fixnum_value(SHUT_WR));
-  mrb_define_const (mrb, io_uring_class, "SHUT_RDWR", mrb_fixnum_value(SHUT_RDWR));
-  mrb_define_const (mrb, io_uring_class, "AT_FDCWD", mrb_fixnum_value(AT_FDCWD));
+  mrb_define_const (mrb, mrb->kernel_module, "POLLERR", mrb_fixnum_value(POLLERR));
+  mrb_define_const (mrb, mrb->kernel_module, "POLLHUP", mrb_fixnum_value(POLLHUP));
+  mrb_define_const (mrb, mrb->kernel_module, "POLLIN",  mrb_fixnum_value(POLLIN));
+  mrb_define_const (mrb, mrb->kernel_module, "POLLNVAL",mrb_fixnum_value(POLLNVAL));
+  mrb_define_const (mrb, mrb->kernel_module, "POLLOUT", mrb_fixnum_value(POLLOUT));
+  mrb_define_const (mrb, mrb->kernel_module, "POLLPRI", mrb_fixnum_value(POLLPRI));
+  mrb_define_const (mrb, mrb->kernel_module, "SHUT_RD", mrb_fixnum_value(SHUT_RD));
+  mrb_define_const (mrb, mrb->kernel_module, "SHUT_WR", mrb_fixnum_value(SHUT_WR));
+  mrb_define_const (mrb, mrb->kernel_module, "SHUT_RDWR", mrb_fixnum_value(SHUT_RDWR));
+  mrb_define_const (mrb, mrb->kernel_module, "AT_FDCWD", mrb_fixnum_value(AT_FDCWD));
 
   io_uring_error_class = mrb_define_class_under(mrb, io_uring_class, "Error", mrb->eStandardError_class);
   mrb_define_class_under(mrb, io_uring_class, "SQRingFullError",  io_uring_error_class);

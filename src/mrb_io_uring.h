@@ -93,7 +93,7 @@ static const struct mrb_data_type mrb_io_uring_open_how_type = {
 };
 
 static long page_size = 0;
-static size_t gem_load_count = 0;
+static mrb_bool init_once_done = FALSE;
 static pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 static mrb_bool can_use_buffers = FALSE;
 #define MRB_IORING_DEFAULT_FIXED_BUFFER_SIZE 131072

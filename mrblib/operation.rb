@@ -63,12 +63,12 @@ class IO::Uring::Operation
     ring.prep_close(sock, sqe_flags)
   end
 
-  def poll_add(sock, poll_mask = IO::Uring::POLLIN, sqe_flags = 0)
+  def poll_add(sock, poll_mask = POLLIN, sqe_flags = 0)
     sqe_flags |= SQE_IO_LINK
     ring.prep_poll_add(sock, poll_mask, sqe_flags)
   end
 
-  def poll_multishot(sock, poll_mask = IO::Uring::POLLIN, sqe_flags = 0)
+  def poll_multishot(sock, poll_mask = POLLIN, sqe_flags = 0)
     sqe_flags |= SQE_IO_LINK
     ring.prep_poll_multishot(sock, poll_mask, sqe_flags)
   end
@@ -83,9 +83,9 @@ class IO::Uring::Operation
     ring.prep_openat2(path, directory, open_how, sqe_flags)
   end
 
-  def read_fixed(file, buffer_size = 131072, offset = 0, sqe_flags = 0)
+  def read_fixed(file, offset = 0, sqe_flags = 0)
     sqe_flags |= SQE_IO_LINK
-    ring.prep_read_fixed(file, buffer_size, offset, sqe_flags)
+    ring.prep_read_fixed(file, offset, sqe_flags)
   end
 
   def cancel(operation, flags = IO::Uring::ASYNC_CANCEL_ALL, sqe_flags = 0)
