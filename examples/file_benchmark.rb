@@ -2,7 +2,6 @@
 setup_start_time = Chrono::Steady.now
 
 def measure_performance(ring, fd, filesize)
-  start = Chrono::Steady.now
   i = 0
   current_pos = 0
   read_bytes = 0
@@ -10,6 +9,7 @@ def measure_performance(ring, fd, filesize)
   # Calculate the number of recv operations needed to read the whole file
   num_operations = (filesize.to_f / ring.fixed_buffer_size).ceil
 
+  start = Chrono::Steady.now
   while (Chrono::Steady.now - start) < 1
     # Issue the prep_read_fixed function calls
     ring.prep_read_fixed(fd, current_pos)

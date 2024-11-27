@@ -1,4 +1,5 @@
 #include "mrb_io_uring.h"
+#include "mruby/boxing_word.h"
 
 static mrb_value
 mrb_io_uring_queue_init_params(mrb_state *mrb, mrb_value self)
@@ -54,10 +55,10 @@ mrb_io_uring_queue_init_params(mrb_state *mrb, mrb_value self)
     mrb_io_uring->sqes = mrb_hash_new(mrb);
     mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "sqes"), mrb_io_uring->sqes);
     if (can_use_buffers) {
-      mrb_io_uring->fixed_buffer_size = fixed_buffer_size;
       size_t max_buffers = MIN(limit.rlim_max / fixed_buffer_size, 16384);
       ret = io_uring_register_buffers_sparse(&mrb_io_uring->ring, max_buffers);
       if (likely(ret == 0)) {
+        mrb_io_uring->fixed_buffer_size = fixed_buffer_size;
         mrb_io_uring->buffers = mrb_ary_new(mrb);
         mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "buffers"), mrb_io_uring->buffers);
         mrb_io_uring->free_list = mrb_ary_new(mrb);
@@ -1093,32 +1094,6 @@ mrb_io_uring_operation_class_init(mrb_state *mrb, mrb_value self)
   return self;
 }
 
-static const char *unsupported_socket_family_name(int family) {
-  switch (family) {
-    case AF_LOCAL: return "AF_LOCAL (Local Communication)";
-    case AF_AX25: return "AF_AX25 (Amateur Radio X.25)";
-    case AF_IPX: return "AF_IPX (IPX Protocol)";
-    case AF_APPLETALK: return "AF_APPLETALK (AppleTalk Protocol)";
-    case AF_ATMPVC: return "AF_ATMPVC (ATM PVCs)";
-    case AF_X25: return "AF_X25 (X.25 Protocol)";
-    case AF_NETLINK: return "AF_NETLINK (Kernel/User-space Communication)";
-    case AF_PACKET: return "AF_PACKET (Low-level Packet Interface)";
-    case AF_BLUETOOTH: return "AF_BLUETOOTH (Bluetooth)";
-    case AF_ALG: return "AF_ALG (Kernel Crypto API)";
-    case AF_VSOCK: return "AF_VSOCK (VM Communication)";
-    default: return "Unknown";
-  }
-}
-
-static const char *unsupported_socket_type_name(int type) {
-  switch (type) {
-    case SOCK_RAW: return "SOCK_RAW (Raw Protocol)";
-    case SOCK_RDM: return "SOCK_RDM (Reliable Datagram)";
-    case SOCK_SEQPACKET: return "SOCK_SEQPACKET (Sequenced Packet)";
-    default: return "Unknown";
-  }
-}
-
 static mrb_value
 mrb_io_uring_operation_to_io(mrb_state *mrb, mrb_value self)
 {
@@ -1165,15 +1140,13 @@ mrb_io_uring_operation_to_io(mrb_state *mrb, mrb_value self)
               socket_class = mrb_class_get(mrb, "UDPSocket");
               break;
             default: {
-              const char *type_name = unsupported_socket_type_name(socktype);
-              mrb_raisef(mrb, E_ARGUMENT_ERROR, "unsupported socket type: %s", type_name);
+              socket_class = mrb_class_get(mrb, "IPSocket");
             }
           }
         }
         break;
       default: {
-        const char *family_name = unsupported_socket_family_name(addr.ss_family);
-        mrb_raisef(mrb, E_ARGUMENT_ERROR, "unsupported socket family: %s", family_name);
+        socket_class = mrb_class_get(mrb, "BasicSocket");
       }
     }
 
