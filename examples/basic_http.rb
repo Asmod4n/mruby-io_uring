@@ -4,7 +4,7 @@ response = "#{headers}#{body}"
 uring = IO::Uring.new
 server = TCPServer.new(0)
 server.listen(4096)
-puts server.local_address.ip_port
+puts "Port to connect to: #{server.local_address.ip_port}"
 uring.prep_multishot_accept(server)
 
 phr = Phr.new
