@@ -232,8 +232,8 @@ decode_op(uint64_t packed_value)
 static mrb_value
 mrb_io_uring_prep_socket(mrb_state *mrb, mrb_value self)
 {
-  mrb_int domain, type, protocol, flags = 0, sqe_flags = 0;
-  mrb_get_args(mrb, "iii|ii", &domain, &type, &protocol, &flags, &sqe_flags);
+  mrb_int domain, type, protocol = 0, flags = 0, sqe_flags = 0;
+  mrb_get_args(mrb, "ii|iii", &domain, &type, &protocol, &flags, &sqe_flags);
 
   mrb_io_uring_t *mrb_io_uring = DATA_PTR(self);
   mrb_value argv[] = {
@@ -886,8 +886,9 @@ mrb_io_uring_process_cqe(mrb_state *mrb, mrb_io_uring_t *mrb_io_uring, struct io
         mrb_int index = mrb_as_int(mrb, index_val);
         mrb_value buf = mrb_ary_ref(mrb, mrb_io_uring->buffers, index);
         if (likely(mrb_string_p(buf))) {
-          RSTR_UNSET_SINGLE_BYTE_FLAG(mrb_str_ptr(buf));
-          RSTR_SET_LEN(mrb_str_ptr(buf), cqe->res);
+          struct RString *buf_str = mrb_str_ptr(buf);
+          RSTR_UNSET_SINGLE_BYTE_FLAG(buf_str);
+          RSTR_SET_LEN(buf_str, cqe->res);
         } else {
           mrb_raise(mrb, E_TYPE_ERROR, "but not found");
         }
@@ -1405,7 +1406,7 @@ mrb_mruby_io_uring_gem_init(mrb_state* mrb)
   MRB_SET_INSTANCE_TT(io_uring_class, MRB_TT_CDATA);
   mrb_define_method_id(mrb, io_uring_class, mrb_intern_lit(mrb, "initialize"),              mrb_io_uring_queue_init_params,       MRB_ARGS_OPT(2));
   mrb_define_method_id(mrb, io_uring_class, mrb_intern_lit(mrb, "submit"),                  mrb_io_uring_submit,                  MRB_ARGS_NONE());
-  mrb_define_method_id(mrb, io_uring_class, mrb_intern_lit(mrb, "prep_socket"),             mrb_io_uring_prep_socket,             MRB_ARGS_ARG(3, 2));
+  mrb_define_method_id(mrb, io_uring_class, mrb_intern_lit(mrb, "prep_socket"),             mrb_io_uring_prep_socket,             MRB_ARGS_ARG(2, 3));
   mrb_define_method_id(mrb, io_uring_class, mrb_intern_lit(mrb, "prep_connect"),            mrb_io_uring_prep_connect,            MRB_ARGS_ARG(2, 1));
   mrb_define_method_id(mrb, io_uring_class, mrb_intern_lit(mrb, "prep_accept"),             mrb_io_uring_prep_accept,             MRB_ARGS_ARG(1, 2));
   mrb_define_method_id(mrb, io_uring_class, mrb_intern_lit(mrb, "prep_multishot_accept"),   mrb_io_uring_prep_multishot_accept,   MRB_ARGS_ARG(1, 2));

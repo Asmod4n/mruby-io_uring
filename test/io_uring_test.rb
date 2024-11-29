@@ -17,7 +17,7 @@ assert ('Socket io') do
     server = TCPServer.new(0)
     server.listen(4096)
     io_uring.prep_multishot_accept(server)
-    io_uring.prep_socket(Socket::AF_INET, Socket::SOCK_STREAM, 0)
+    io_uring.prep_socket(Socket::AF_INET, Socket::SOCK_STREAM)
     i = 5
     while i > 0
         num_cqes = io_uring.wait(1, 1) do |operation|

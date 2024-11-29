@@ -51,11 +51,6 @@ fd = nil
 ring.wait(1, 1) do |operation|
   fd = operation.file
 end
-ring.prep_statx('file.txt', File.open(File.expand_path(File.dirname(__FILE__))))
-
-ring.wait(1, 1) do |operation|
-  puts "Operation path: #{operation.path}, atime: #{operation.statx.atime}"
-end
 
 setup_time = Chrono::Steady.now - setup_start_time
 
