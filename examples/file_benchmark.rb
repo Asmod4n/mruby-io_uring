@@ -41,7 +41,7 @@ def measure_performance(ring, fd, filesize)
   ops_per_second = i / elapsed_time
   gbps = (read_bytes / elapsed_time) / (1000000000)
 
-  return { ops_per_second: ops_per_second, gbps: gbps, read_bytes: read_bytes, elapsed_time: elapsed_time }
+  return { read_bytes: read_bytes, elapsed_time: elapsed_time, ops_per_second: ops_per_second, gbps: gbps  }
 end
 
 ring = IO::Uring.new
@@ -50,6 +50,11 @@ filesize = File.size(File.expand_path(File.dirname(__FILE__)) + '/file.txt')
 fd = nil
 ring.wait(1, 1) do |operation|
   fd = operation.file
+end
+ring.prep_statx('file.txt', File.open(File.expand_path(File.dirname(__FILE__))))
+
+ring.wait(1, 1) do |operation|
+  puts "Operation path: #{operation.path}, atime: #{operation.statx.atime}"
 end
 
 setup_time = Chrono::Steady.now - setup_start_time

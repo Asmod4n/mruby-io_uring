@@ -19,6 +19,11 @@
 #include <mruby/ext/io.h>
 #include <sys/param.h>
 #include <stdlib.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <linux/stat.h>
+#include <errno.h>
+#include <string.h>
 
 #ifndef NSEC_PER_SEC
 #define NSEC_PER_SEC 1000000000
@@ -34,49 +39,53 @@ typedef struct {
   struct io_uring_params params;
   mrb_value sqes;
   struct RClass *operation_class;
-  mrb_value ring_sym;
-  mrb_value type_sym;
-  mrb_sym sock_sym;
-  mrb_value sock_val;
-  mrb_sym buf_sym;
-  mrb_value buf_val;
-  mrb_value poll_mask_sym;
-  mrb_sym file_sym;
-  mrb_value file_val;
-  mrb_sym path_sym;
-  mrb_value path_val;
-  mrb_value directory_sym;
-  mrb_value open_how_sym;
-  mrb_value operation_sym;
-  mrb_sym res_sym;
-  mrb_sym flags_sym;
-  mrb_sym errno_sym;
-  mrb_sym userdata_sym;
-  mrb_value userdata_val;
+  mrb_value at_ring_val;
+  mrb_value at_type_val;
+  mrb_sym at_sock_sym;
+  mrb_value at_sock_val;
+  mrb_sym at_buf_sym;
+  mrb_value at_buf_val;
+  mrb_value at_poll_mask_val;
+  mrb_sym at_file_sym;
+  mrb_value at_file_val;
+  mrb_sym at_path_sym;
+  mrb_value at_path_val;
+  mrb_value at_directory_val;
+  mrb_value at_open_how_val;
+  mrb_value at_operation_val;
+  mrb_sym at_res_sym;
+  mrb_sym at_flags_sym;
+  mrb_sym at_errno_sym;
+  mrb_sym at_userdata_sym;
+  mrb_value at_userdata_val;
   mrb_sym buf_index_sym;
   mrb_value buf_index_val;
-  mrb_value socket_sym;
-  mrb_value accept_sym;
-  mrb_value multishot_accept_sym;
-  mrb_value connect_sym;
-  mrb_value addrinfo_sym;
-  mrb_value recv_sym;
-  mrb_value splice_sym;
-  mrb_value send_sym;
+  mrb_value socket_val;
+  mrb_value accept_val;
+  mrb_value multishot_accept_val;
+  mrb_value connect_val;
+  mrb_value at_addrinfo_val;
+  mrb_value recv_val;
+  mrb_value splice_val;
+  mrb_value send_val;
   mrb_sym buf_was_frozen_sym;
   mrb_value buf_was_frozen_val;
   mrb_sym path_was_frozen_sym;
   mrb_value path_was_frozen_val;
-  mrb_value shutdown_sym;
-  mrb_value close_sym;
-  mrb_value poll_add_sym;
-  mrb_value poll_multishot_sym;
-  mrb_value poll_update_sym;
-  mrb_value openat2_sym;
-  mrb_value read_sym;
-  mrb_value read_fixed_sym;
-  mrb_value write_sym;
-  mrb_value cancel_sym;
+  mrb_value shutdown_val;
+  mrb_value close_val;
+  mrb_value poll_add_val;
+  mrb_value poll_multishot_val;
+  mrb_value poll_update_val;
+  mrb_value openat2_val;
+  mrb_value read_val;
+  mrb_value read_fixed_val;
+  mrb_value write_val;
+  mrb_value cancel_val;
+  mrb_sym statx_sym;
+  mrb_value statx_val;
+  mrb_sym at_statx_sym;
+  mrb_value at_statx_val;
   mrb_int fixed_buffer_size;
   mrb_value buffers;
   mrb_value free_list;
@@ -107,6 +116,7 @@ enum mrb_io_uring_op {
   MRB_IORING_OP_WRITE,
   MRB_IORING_OP_SEND,
   MRB_IORING_OP_OPENAT2,
+  MRB_IORING_OP_STATX,
   MRB_IORING_OP_CONNECT,
   MRB_IORING_OP_SPLICE,
   MRB_IORING_OP_SHUTDOWN,
@@ -134,6 +144,10 @@ static const struct mrb_data_type mrb_io_uring_operation_type = {
 
 static const struct mrb_data_type mrb_io_uring_open_how_type = {
   "$i_mrb_io_uring_open_how_type", mrb_free
+};
+
+static const struct mrb_data_type mrb_io_uring_statx_type = {
+  "$i_mrb_io_uring_statx_type", mrb_free
 };
 
 static long page_size = 0;
