@@ -21,10 +21,7 @@ assert ('Socket io') do
     i = 5
     while i > 0
         num_cqes = io_uring.wait(1, 1) do |operation|
-            if operation.errno
-                $stdout.puts operation.inspect
-                raise operation.errno
-            end
+            assert_nil(operation.errno, operation.inspect)
             case operation.type
             when :socket
                 assert_equal(operation.to_io.class, TCPSocket)

@@ -94,8 +94,24 @@ class IO::Uring::Operation
   end
 
   def inspect
-    self.instance_variables.map do |var|
-      "#{var}=#{instance_variable_get(var).inspect}"
-    end.join(", ").prepend("#<#{self.class}: ") + ">"
+    attrs = {
+      ring: @ring,
+      type: @type,
+      sock: @sock,
+      buf: @buf,
+      poll_mask: @poll_mask,
+      file: @file,
+      path: @path,
+      directory: @directory,
+      open_how: @open_how,
+      statx: @statx,
+      operation: @operation,
+      res: @res,
+      flags: @flags,
+      errno: @errno
+    }
+
+    attr_str = attrs.map { |k, v| "#{k}=#{v.inspect}" }.join(", ")
+    "#<#{self.class}: #{attr_str}>"
   end
 end
