@@ -3,6 +3,7 @@
 static mrb_value
 mrb_io_uring_queue_init_params(mrb_state *mrb, mrb_value self)
 {
+  printf("page_size: %ld\n", page_size);
   mrb_int fixed_buffer_size = MRB_IORING_DEFAULT_FIXED_BUFFER_SIZE, entries = 2048, flags = 0;
   mrb_get_args(mrb, "|iii", &fixed_buffer_size, &entries, &flags);
   if (fixed_buffer_size < page_size) {
@@ -1418,7 +1419,7 @@ mrb_mruby_io_uring_gem_init(mrb_state* mrb)
     initialize_can_use_buffers_once();
     if (can_use_buffers) {
       page_size = sysconf(_SC_PAGESIZE);
-      if (page_size == 0) {
+      if (page_size <= 0) {
         mrb_bug(mrb, "broken linux distro, returns a page size of 0");
       }
     }
