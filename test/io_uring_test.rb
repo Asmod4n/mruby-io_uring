@@ -28,7 +28,7 @@ assert ('Socket io') do
                 io_uring.prep_connect(operation.sock, server.local_address.to_sockaddr)
             when :connect
                 io_uring.prep_send(operation.sock, "hello")
-            when :multishot_accept
+            when :accept
                 io_uring.prep_recv(operation.sock)
             when :send
                 assert_equal(operation.res, "hello".bytesize)
