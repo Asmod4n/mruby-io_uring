@@ -1466,6 +1466,8 @@ mrb_mruby_io_uring_gem_init(mrb_state* mrb)
   if (io_uring_opcode_supported(probe, IORING_OP_POLL_ADD)) {
     mrb_define_method_id(mrb, io_uring_class, mrb_intern_lit(mrb, "prep_poll_add"), mrb_io_uring_prep_poll_add, MRB_ARGS_ARG(1, 2));
     mrb_define_method_id(mrb, io_uring_class, mrb_intern_lit(mrb, "prep_poll_multishot"), mrb_io_uring_prep_poll_multishot, MRB_ARGS_ARG(1, 2));
+  }
+  if (io_uring_opcode_supported(probe, IORING_OP_POLL_REMOVE)) {
     mrb_define_method_id(mrb, io_uring_class, mrb_intern_lit(mrb, "prep_poll_update"), mrb_io_uring_prep_poll_update, MRB_ARGS_ARG(3, 1));
   }
   if (io_uring_opcode_supported(probe, IORING_OP_OPENAT2)) {
