@@ -1418,6 +1418,9 @@ mrb_mruby_io_uring_gem_init(mrb_state* mrb)
     initialize_can_use_buffers_once();
     if (can_use_buffers) {
       page_size = sysconf(_SC_PAGESIZE);
+      if (page_size == 0) {
+        mrb_bug(mrb, "broken linux distro, returns a page size of 0");
+      }
     }
     initialize_high_bits_check_once(mrb);
   }
