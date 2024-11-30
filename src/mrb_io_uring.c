@@ -1,4 +1,5 @@
 #include "mrb_io_uring.h"
+#include "liburing/io_uring.h"
 
 static mrb_value
 mrb_io_uring_queue_init_params(mrb_state *mrb, mrb_value self)
@@ -1419,12 +1420,13 @@ mrb_mruby_io_uring_gem_init(mrb_state* mrb)
     if (can_use_buffers) {
       page_size = sysconf(_SC_PAGESIZE);
       if (page_size <= 0) {
-        mrb_bug(mrb, "broken linux distro, returns a page size of 0");
+        mrb_bug(mrb, "broken linux distro, returns a page size of 0 or less");
       }
     }
     initialize_high_bits_check_once(mrb);
   }
   pthread_mutex_unlock(&mutex);
+
 
   struct RClass *io_uring_class, *io_uring_error_class, *io_uring_op_class, *io_uring_open_how_class;
 
@@ -1432,27 +1434,60 @@ mrb_mruby_io_uring_gem_init(mrb_state* mrb)
   MRB_SET_INSTANCE_TT(io_uring_class, MRB_TT_CDATA);
   mrb_define_method_id(mrb, io_uring_class, mrb_intern_lit(mrb, "initialize"),              mrb_io_uring_queue_init_params,       MRB_ARGS_OPT(2));
   mrb_define_method_id(mrb, io_uring_class, mrb_intern_lit(mrb, "submit"),                  mrb_io_uring_submit,                  MRB_ARGS_NONE());
-  mrb_define_method_id(mrb, io_uring_class, mrb_intern_lit(mrb, "prep_socket"),             mrb_io_uring_prep_socket,             MRB_ARGS_ARG(2, 3));
-  mrb_define_method_id(mrb, io_uring_class, mrb_intern_lit(mrb, "prep_connect"),            mrb_io_uring_prep_connect,            MRB_ARGS_ARG(2, 1));
-  mrb_define_method_id(mrb, io_uring_class, mrb_intern_lit(mrb, "prep_accept"),             mrb_io_uring_prep_accept,             MRB_ARGS_ARG(1, 2));
-  mrb_define_method_id(mrb, io_uring_class, mrb_intern_lit(mrb, "prep_multishot_accept"),   mrb_io_uring_prep_multishot_accept,   MRB_ARGS_ARG(1, 2));
-  mrb_define_method_id(mrb, io_uring_class, mrb_intern_lit(mrb, "prep_recv"),               mrb_io_uring_prep_recv,               MRB_ARGS_ARG(1, 3));
-  mrb_define_method_id(mrb, io_uring_class, mrb_intern_lit(mrb, "prep_splice"),             mrb_io_uring_prep_splice,             MRB_ARGS_ARG(6, 1));
-  mrb_define_method_id(mrb, io_uring_class, mrb_intern_lit(mrb, "prep_send"),               mrb_io_uring_prep_send,               MRB_ARGS_ARG(2, 2));
-  mrb_define_method_id(mrb, io_uring_class, mrb_intern_lit(mrb, "prep_shutdown"),           mrb_io_uring_prep_shutdown,           MRB_ARGS_ARG(2, 1));
-  mrb_define_method_id(mrb, io_uring_class, mrb_intern_lit(mrb, "prep_close"),              mrb_io_uring_prep_close,              MRB_ARGS_ARG(1, 1));
-  mrb_define_method_id(mrb, io_uring_class, mrb_intern_lit(mrb, "prep_poll_add"),           mrb_io_uring_prep_poll_add,           MRB_ARGS_ARG(1, 2));
-  mrb_define_method_id(mrb, io_uring_class, mrb_intern_lit(mrb, "prep_poll_multishot"),     mrb_io_uring_prep_poll_multishot,     MRB_ARGS_ARG(1, 2));
-  mrb_define_method_id(mrb, io_uring_class, mrb_intern_lit(mrb, "prep_poll_update"),        mrb_io_uring_prep_poll_update,        MRB_ARGS_ARG(3, 1));
-  mrb_define_method_id(mrb, io_uring_class, mrb_intern_lit(mrb, "prep_openat2"),            mrb_io_uring_prep_openat2,            MRB_ARGS_ARG(1, 3));
-  mrb_define_method_id(mrb, io_uring_class, mrb_intern_lit(mrb, "prep_statx"),              mrb_io_uring_prep_statx,              MRB_ARGS_ARG(1, 3));
-  mrb_define_method_id(mrb, io_uring_class, mrb_intern_lit(mrb, "prep_read"),               mrb_io_uring_prep_read,               MRB_ARGS_ARG(1, 3));
-if (can_use_buffers) {
-  mrb_define_method_id(mrb, io_uring_class, mrb_intern_lit(mrb, "fixed_buffer_size"),       mrb_io_uring_get_fixed_buffer_size,   MRB_ARGS_NONE());
-  mrb_define_method_id(mrb, io_uring_class, mrb_intern_lit(mrb, "prep_read_fixed"),         mrb_io_uring_prep_read_fixed,         MRB_ARGS_ARG(1, 2));
-}
-  mrb_define_method_id(mrb, io_uring_class, mrb_intern_lit(mrb, "prep_write"),              mrb_io_uring_prep_write,              MRB_ARGS_ARG(3, 1));
-  mrb_define_method_id(mrb, io_uring_class, mrb_intern_lit(mrb, "prep_cancel"),             mrb_io_uring_prep_cancel,             MRB_ARGS_ARG(1, 2));
+  struct io_uring_probe *probe = io_uring_get_probe();
+  if (!probe) {
+    mrb_sys_fail(mrb, "io_uring_get_probe");
+  }
+  if (io_uring_opcode_supported(probe, IORING_OP_SOCKET)) {
+    mrb_define_method_id(mrb, io_uring_class, mrb_intern_lit(mrb, "prep_socket"), mrb_io_uring_prep_socket, MRB_ARGS_ARG(2, 3));
+  }
+  if (io_uring_opcode_supported(probe, IORING_OP_CONNECT)) {
+    mrb_define_method_id(mrb, io_uring_class, mrb_intern_lit(mrb, "prep_connect"), mrb_io_uring_prep_connect, MRB_ARGS_ARG(2, 1));
+  }
+  if (io_uring_opcode_supported(probe, IORING_OP_ACCEPT)) {
+    mrb_define_method_id(mrb, io_uring_class, mrb_intern_lit(mrb, "prep_accept"), mrb_io_uring_prep_accept, MRB_ARGS_ARG(1, 2));
+    mrb_define_method_id(mrb, io_uring_class, mrb_intern_lit(mrb, "prep_multishot_accept"), mrb_io_uring_prep_multishot_accept, MRB_ARGS_ARG(1, 2));
+  }
+  if (io_uring_opcode_supported(probe, IORING_OP_RECV)) {
+    mrb_define_method_id(mrb, io_uring_class, mrb_intern_lit(mrb, "prep_recv"), mrb_io_uring_prep_recv, MRB_ARGS_ARG(1, 3));
+  }
+  if (io_uring_opcode_supported(probe, IORING_OP_SPLICE)) {
+    mrb_define_method_id(mrb, io_uring_class, mrb_intern_lit(mrb, "prep_splice"), mrb_io_uring_prep_splice, MRB_ARGS_ARG(6, 1));
+  }
+  if (io_uring_opcode_supported(probe, IORING_OP_SEND)) {
+    mrb_define_method_id(mrb, io_uring_class, mrb_intern_lit(mrb, "prep_send"), mrb_io_uring_prep_send, MRB_ARGS_ARG(2, 2));
+  }
+  if (io_uring_opcode_supported(probe, IORING_OP_SHUTDOWN)) {
+    mrb_define_method_id(mrb, io_uring_class, mrb_intern_lit(mrb, "prep_shutdown"), mrb_io_uring_prep_shutdown, MRB_ARGS_ARG(2, 1));
+  }
+  if (io_uring_opcode_supported(probe, IORING_OP_CLOSE)) {
+    mrb_define_method_id(mrb, io_uring_class, mrb_intern_lit(mrb, "prep_close"), mrb_io_uring_prep_close, MRB_ARGS_ARG(1, 1));
+  }
+  if (io_uring_opcode_supported(probe, IORING_OP_POLL_ADD)) {
+    mrb_define_method_id(mrb, io_uring_class, mrb_intern_lit(mrb, "prep_poll_add"), mrb_io_uring_prep_poll_add, MRB_ARGS_ARG(1, 2));
+    mrb_define_method_id(mrb, io_uring_class, mrb_intern_lit(mrb, "prep_poll_multishot"), mrb_io_uring_prep_poll_multishot, MRB_ARGS_ARG(1, 2));
+    mrb_define_method_id(mrb, io_uring_class, mrb_intern_lit(mrb, "prep_poll_update"), mrb_io_uring_prep_poll_update, MRB_ARGS_ARG(3, 1));
+  }
+  if (io_uring_opcode_supported(probe, IORING_OP_OPENAT2)) {
+    mrb_define_method_id(mrb, io_uring_class, mrb_intern_lit(mrb, "prep_openat2"), mrb_io_uring_prep_openat2, MRB_ARGS_ARG(1, 3));
+  }
+  if (io_uring_opcode_supported(probe, IORING_OP_STATX)) {
+    mrb_define_method_id(mrb, io_uring_class, mrb_intern_lit(mrb, "prep_statx"), mrb_io_uring_prep_statx, MRB_ARGS_ARG(1, 3));
+  }
+  if (io_uring_opcode_supported(probe, IORING_OP_READ)) {
+    mrb_define_method_id(mrb, io_uring_class, mrb_intern_lit(mrb, "prep_read"), mrb_io_uring_prep_read, MRB_ARGS_ARG(1, 3));
+  }
+  if (io_uring_opcode_supported(probe, IORING_OP_WRITE)) {
+    mrb_define_method_id(mrb, io_uring_class, mrb_intern_lit(mrb, "prep_write"), mrb_io_uring_prep_write, MRB_ARGS_ARG(3, 1));
+  }
+  if (io_uring_opcode_supported(probe, IORING_OP_ASYNC_CANCEL)) {
+    mrb_define_method_id(mrb, io_uring_class, mrb_intern_lit(mrb, "prep_cancel"), mrb_io_uring_prep_cancel, MRB_ARGS_ARG(1, 2));
+  }
+  io_uring_free_probe(probe);
+  if (can_use_buffers) {
+    mrb_define_method_id(mrb, io_uring_class, mrb_intern_lit(mrb, "fixed_buffer_size"),       mrb_io_uring_get_fixed_buffer_size,   MRB_ARGS_NONE());
+    mrb_define_method_id(mrb, io_uring_class, mrb_intern_lit(mrb, "prep_read_fixed"),         mrb_io_uring_prep_read_fixed,         MRB_ARGS_ARG(1, 2));
+  }
   mrb_define_method_id(mrb, io_uring_class, mrb_intern_lit(mrb, "wait"),                    mrb_io_uring_submit_and_wait_timeout, MRB_ARGS_OPT(2)|MRB_ARGS_BLOCK());
   mrb_define_const_id (mrb, io_uring_class, mrb_intern_lit(mrb, "ASYNC_CANCEL_ALL"),        mrb_fixnum_value(IORING_ASYNC_CANCEL_ALL));
   mrb_define_const_id (mrb, io_uring_class, mrb_intern_lit(mrb, "ASYNC_CANCEL_FD"),         mrb_fixnum_value(IORING_ASYNC_CANCEL_FD));
