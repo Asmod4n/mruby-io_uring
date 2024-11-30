@@ -13,7 +13,7 @@ jobs:
   fetch-versions:
     runs-on: ubuntu-latest
     outputs:
-      supported: ${{ steps.get-versions.outputs.supported-ubuntu-lts }}
+      supported-ubuntu-lts: ${{ steps.get-versions.outputs.supported-ubuntu-lts }}
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
@@ -24,14 +24,13 @@ jobs:
     - name: Fetch supported Ubuntu LTS versions
       id: get-versions
       run: |
-        chmod +x fetch_supported_ubuntu_versions.sh
-        ./fetch_supported_ubuntu_versions.sh
+        .github/workflows/fetch_supported_ubuntu_versions.sh
 
   test:
     needs: fetch-versions
     strategy:
       matrix:
-        os: ${{ fromJson(needs.fetch-versions.outputs.supported-ubuntu-lts) }}
+        os: ${{ fromJson(needs['fetch-versions'].outputs['supported-ubuntu-lts']) }}
         ruby-version: ['3.1', '3.2', '3.3']
 
     runs-on: ${{ matrix.os }}
