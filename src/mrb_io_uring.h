@@ -158,4 +158,4 @@ static long page_size = 0;
 static mrb_bool init_once_done = FALSE;
 static pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 static mrb_bool can_use_buffers = FALSE;
-#define MRB_IORING_DEFAULT_FIXED_BUFFER_SIZE 131072
+#define MRB_IORING_DEFAULT_FIXED_BUFFER_SIZE 65536

@@ -23,7 +23,7 @@ def measure_performance(ring, fd, filesize)
     ring.wait(num_operations, 1) do |operation|
       if operation.errno
         puts operation.inspect
-        raise operation.errno 
+        raise operation.errno
       end
       case operation.type
       when :read_fixed
@@ -33,7 +33,7 @@ def measure_performance(ring, fd, filesize)
       end
       i += 1
     end
-  
+
     current_pos = 0
   end
 
