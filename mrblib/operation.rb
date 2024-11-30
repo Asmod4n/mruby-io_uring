@@ -94,8 +94,8 @@ class IO::Uring::Operation
   end
 
   def inspect
-    instance_variables.map do |var|
+    self.instance_variables.map do |var|
       "#{var}=#{instance_variable_get(var).inspect}"
-    end.join(", ").prepend("#<#{self.class}: ")
+    end.join(", ").prepend("#<#{self.class}: ") + ">"
   end
 end
