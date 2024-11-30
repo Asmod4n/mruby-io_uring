@@ -24,6 +24,10 @@
 #include <linux/stat.h>
 #include <errno.h>
 #include <string.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <sys/syscall.h>
 
 #ifndef NSEC_PER_SEC
 #define NSEC_PER_SEC 1000000000

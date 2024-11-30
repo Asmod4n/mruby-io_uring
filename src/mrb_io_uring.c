@@ -138,7 +138,7 @@ mrb_io_uring_buffer_get(mrb_state *mrb, mrb_io_uring_t *mrb_io_uring)
     mrb_value index_val = mrb_ary_pop(mrb, mrb_io_uring->free_list);
     mrb_int index = mrb_as_int(mrb, index_val);
     mrb_io_uring_buffer_t result = {index, mrb_ary_ref(mrb, mrb_io_uring->buffers, index) };
-  
+
     return result;
   }
 
@@ -151,7 +151,7 @@ mrb_io_uring_buffer_get(mrb_state *mrb, mrb_io_uring_t *mrb_io_uring)
   if (likely(ret == 1)) {
     mrb_io_uring_buffer_t result = { num_buffers,  buffer };
     mrb_ary_push(mrb, mrb_io_uring->buffers, buffer);
-  
+
     return result;
   } else {
     errno = -ret;
@@ -513,7 +513,7 @@ mrb_io_uring_prep_poll_add(mrb_state *mrb, mrb_value self)
   uint64_t encoded_operation = encode_operation_op(mrb, mrb_ptr(operation), MRB_IORING_OP_POLL_ADD);
   mrb_data_init(operation, &encoded_operation, &mrb_io_uring_operation_type);
 
-  
+
   struct io_uring_sqe *sqe = mrb_io_uring_get_sqe(mrb, &mrb_io_uring->ring);
   io_uring_sqe_set_data64(sqe, encoded_operation);
   io_uring_sqe_set_flags(sqe, (unsigned int) sqe_flags);
@@ -811,32 +811,37 @@ mrb_io_uring_prep_statx(mrb_state *mrb, mrb_value self)
 static void
 mrb_statx_set_intance_variables(mrb_state *mrb, mrb_value self, struct statx *stx)
 {
-  mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@mask"), mrb_int_value(mrb, stx->stx_mask));
-  mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@blksize"), mrb_int_value(mrb, stx->stx_blksize));
-  mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@attributes"), mrb_int_value(mrb, stx->stx_attributes));
-  mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@nlink"), mrb_int_value(mrb, stx->stx_nlink));
-  mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@uid"), mrb_int_value(mrb, stx->stx_uid));
-  mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@gid"), mrb_int_value(mrb, stx->stx_gid));
-  mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@mode"), mrb_int_value(mrb, stx->stx_mode));
-  mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@ino"), mrb_int_value(mrb, stx->stx_ino));
-  mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@size"), mrb_int_value(mrb, stx->stx_size));
-  mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@blocks"), mrb_int_value(mrb, stx->stx_blocks));
-  mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@attributes_mask"), mrb_int_value(mrb, stx->stx_attributes_mask));
-  mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@atime_sec"), mrb_int_value(mrb, stx->stx_atime.tv_sec));
-  mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@atime_nsec"), mrb_int_value(mrb, stx->stx_atime.tv_nsec));
-  mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@btime_sec"), mrb_int_value(mrb, stx->stx_btime.tv_sec));
-  mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@btime_nsec"), mrb_int_value(mrb, stx->stx_btime.tv_nsec));
-  mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@ctime_sec"), mrb_int_value(mrb, stx->stx_ctime.tv_sec));
-  mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@ctime_nsec"), mrb_int_value(mrb, stx->stx_ctime.tv_nsec));
-  mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@mtime_sec"), mrb_int_value(mrb, stx->stx_mtime.tv_sec));
-  mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@mtime_nsec"), mrb_int_value(mrb, stx->stx_mtime.tv_nsec));
-  mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@rdev_major"), mrb_int_value(mrb, stx->stx_rdev_major));
-  mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@rdev_minor"), mrb_int_value(mrb, stx->stx_rdev_minor));
-  mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@dev_major"), mrb_int_value(mrb, stx->stx_dev_major));
-  mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@dev_minor"), mrb_int_value(mrb, stx->stx_dev_minor));
+mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@mask"), mrb_int_value(mrb, stx->stx_mask));
+mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@blksize"), mrb_int_value(mrb, stx->stx_blksize));
+mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@attributes"), mrb_int_value(mrb, stx->stx_attributes));
+mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@nlink"), mrb_int_value(mrb, stx->stx_nlink));
+mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@uid"), mrb_int_value(mrb, stx->stx_uid));
+mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@gid"), mrb_int_value(mrb, stx->stx_gid));
+mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@mode"), mrb_int_value(mrb, stx->stx_mode));
+mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@ino"), mrb_int_value(mrb, stx->stx_ino));
+mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@size"), mrb_int_value(mrb, stx->stx_size));
+mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@blocks"), mrb_int_value(mrb, stx->stx_blocks));
+mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@attributes_mask"), mrb_int_value(mrb, stx->stx_attributes_mask));
+mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@atime_sec"), mrb_int_value(mrb, stx->stx_atime.tv_sec));
+mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@atime_nsec"), mrb_int_value(mrb, stx->stx_atime.tv_nsec));
+mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@btime_sec"), mrb_int_value(mrb, stx->stx_btime.tv_sec));
+mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@btime_nsec"), mrb_int_value(mrb, stx->stx_btime.tv_nsec));
+mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@ctime_sec"), mrb_int_value(mrb, stx->stx_ctime.tv_sec));
+mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@ctime_nsec"), mrb_int_value(mrb, stx->stx_ctime.tv_nsec));
+mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@mtime_sec"), mrb_int_value(mrb, stx->stx_mtime.tv_sec));
+mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@mtime_nsec"), mrb_int_value(mrb, stx->stx_mtime.tv_nsec));
+mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@rdev_major"), mrb_int_value(mrb, stx->stx_rdev_major));
+mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@rdev_minor"), mrb_int_value(mrb, stx->stx_rdev_minor));
+mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@dev_major"), mrb_int_value(mrb, stx->stx_dev_major));
+mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@dev_minor"), mrb_int_value(mrb, stx->stx_dev_minor));
+
+#ifdef STATX_MNT_ID
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@mnt_id"), mrb_int_value(mrb, stx->stx_mnt_id));
+#endif
+#ifdef STATX_DIOALIGN
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@dio_mem_align"), mrb_int_value(mrb, stx->stx_dio_mem_align));
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@dio_offset_align"), mrb_int_value(mrb, stx->stx_dio_offset_align));
+#endif
 }
 
 static mrb_value
@@ -863,7 +868,7 @@ mrb_statx_initialize(mrb_state *mrb, mrb_value self)
     dfd = mrb_integer(mrb_convert_type(mrb, dirfd, MRB_TT_INTEGER, "Integer", "fileno"));
   }
 
-  if (statx(dfd, path, flags, mask, &stx) < 0) {
+  if (syscall(SYS_statx, dfd, path, flags, mask, &stx) < 0) {
     mrb_sys_fail(mrb, "statx");
   }
 
@@ -1165,9 +1170,7 @@ mrb_io_uring_parse_flags_string(mrb_state *mrb, mrb_value flags_val)
   return flags;
 }
 
-static __u64
-mrb_io_uring_parse_resolve_string(mrb_state *mrb, mrb_value resolve)
-{
+static __u64 mrb_io_uring_parse_resolve_string(mrb_state *mrb, mrb_value resolve) {
   if (mrb_nil_p(resolve)) {
     return 0;
   }
@@ -1180,34 +1183,54 @@ mrb_io_uring_parse_resolve_string(mrb_state *mrb, mrb_value resolve)
 
     switch (flag) {
       case 'B':
+#ifdef RESOLVE_BENEATH
         if (unlikely(resolve_flags & RESOLVE_BENEATH)) {
           mrb_raise(mrb, E_ARGUMENT_ERROR, "flag 'B' specified more than once");
         }
         resolve_flags |= RESOLVE_BENEATH;
+#else
+        mrb_raise(mrb, E_ARGUMENT_ERROR, "RESOLVE_BENEATH is not supported");
+#endif
         break;
       case 'C':
+#ifdef RESOLVE_CACHED
         if (unlikely(resolve_flags & RESOLVE_CACHED)) {
           mrb_raise(mrb, E_ARGUMENT_ERROR, "flag 'C' specified more than once");
         }
         resolve_flags |= RESOLVE_CACHED;
+#else
+        mrb_raise(mrb, E_ARGUMENT_ERROR, "RESOLVE_CACHED is not supported");
+#endif
         break;
       case 'L':
+#ifdef RESOLVE_NO_SYMLINKS
         if (unlikely(resolve_flags & RESOLVE_NO_SYMLINKS)) {
           mrb_raise(mrb, E_ARGUMENT_ERROR, "flag 'L' specified more than once");
         }
         resolve_flags |= RESOLVE_NO_SYMLINKS;
+#else
+        mrb_raise(mrb, E_ARGUMENT_ERROR, "RESOLVE_NO_SYMLINKS is not supported");
+#endif
         break;
       case 'R':
+#ifdef RESOLVE_IN_ROOT
         if (unlikely(resolve_flags & RESOLVE_IN_ROOT)) {
           mrb_raise(mrb, E_ARGUMENT_ERROR, "flag 'R' specified more than once");
         }
         resolve_flags |= RESOLVE_IN_ROOT;
+#else
+        mrb_raise(mrb, E_ARGUMENT_ERROR, "RESOLVE_IN_ROOT is not supported");
+#endif
         break;
       case 'X':
+#ifdef RESOLVE_NO_XDEV
         if (unlikely(resolve_flags & RESOLVE_NO_XDEV)) {
           mrb_raise(mrb, E_ARGUMENT_ERROR, "flag 'X' specified more than once");
         }
         resolve_flags |= RESOLVE_NO_XDEV;
+#else
+        mrb_raise(mrb, E_ARGUMENT_ERROR, "RESOLVE_NO_XDEV is not supported");
+#endif
         break;
       default:
         mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid resolve string");
@@ -1458,30 +1481,74 @@ if (can_use_buffers) {
   mrb_define_method(mrb, statx_class, "initialize", mrb_statx_initialize, MRB_ARGS_ARG(1, 3));
 
   /* Define constants for Statx */
+#ifdef STATX_TYPE
   mrb_define_const(mrb, statx_class, "TYPE", mrb_int_value(mrb, STATX_TYPE));
+#endif
+#ifdef STATX_MODE
   mrb_define_const(mrb, statx_class, "MODE", mrb_int_value(mrb, STATX_MODE));
+#endif
+#ifdef STATX_NLINK
   mrb_define_const(mrb, statx_class, "NLINK", mrb_int_value(mrb, STATX_NLINK));
+#endif
+#ifdef STATX_UID
   mrb_define_const(mrb, statx_class, "UID", mrb_int_value(mrb, STATX_UID));
+#endif
+#ifdef STATX_GID
   mrb_define_const(mrb, statx_class, "GID", mrb_int_value(mrb, STATX_GID));
+#endif
+#ifdef STATX_ATIME
   mrb_define_const(mrb, statx_class, "ATIME", mrb_int_value(mrb, STATX_ATIME));
+#endif
+#ifdef STATX_MTIME
   mrb_define_const(mrb, statx_class, "MTIME", mrb_int_value(mrb, STATX_MTIME));
+#endif
+#ifdef STATX_CTIME
   mrb_define_const(mrb, statx_class, "CTIME", mrb_int_value(mrb, STATX_CTIME));
+#endif
+#ifdef STATX_INO
   mrb_define_const(mrb, statx_class, "INO", mrb_int_value(mrb, STATX_INO));
+#endif
+#ifdef STATX_SIZE
   mrb_define_const(mrb, statx_class, "SIZE", mrb_int_value(mrb, STATX_SIZE));
+#endif
+#ifdef STATX_BLOCKS
   mrb_define_const(mrb, statx_class, "BLOCKS", mrb_int_value(mrb, STATX_BLOCKS));
+#endif
+#ifdef STATX_BASIC_STATS
   mrb_define_const(mrb, statx_class, "BASIC_STATS", mrb_int_value(mrb, STATX_BASIC_STATS));
+#endif
+#ifdef STATX_BTIME
   mrb_define_const(mrb, statx_class, "BTIME", mrb_int_value(mrb, STATX_BTIME));
+#endif
+#ifdef STATX_ALL
   mrb_define_const(mrb, statx_class, "ALL", mrb_int_value(mrb, STATX_ALL));
+#endif
+#ifdef STATX_MNT_ID
   mrb_define_const(mrb, statx_class, "MNT_ID", mrb_int_value(mrb, STATX_MNT_ID));
+#endif
+#ifdef STATX_DIOALIGN
   mrb_define_const(mrb, statx_class, "DIOALIGN", mrb_int_value(mrb, STATX_DIOALIGN));
+#endif
 
   /* Define other constants in Kernel */
+#ifdef AT_EMPTY_PATH
   mrb_define_const(mrb, mrb->kernel_module, "AT_EMPTY_PATH", mrb_int_value(mrb, AT_EMPTY_PATH));
+#endif
+#ifdef AT_NO_AUTOMOUNT
   mrb_define_const(mrb, mrb->kernel_module, "AT_NO_AUTOMOUNT", mrb_int_value(mrb, AT_NO_AUTOMOUNT));
+#endif
+#ifdef AT_SYMLINK_NOFOLLOW
   mrb_define_const(mrb, mrb->kernel_module, "AT_SYMLINK_NOFOLLOW", mrb_int_value(mrb, AT_SYMLINK_NOFOLLOW));
+#endif
+#ifdef AT_STATX_SYNC_AS_STAT
   mrb_define_const(mrb, mrb->kernel_module, "AT_STATX_SYNC_AS_STAT", mrb_int_value(mrb, AT_STATX_SYNC_AS_STAT));
+#endif
+#ifdef AT_STATX_FORCE_SYNC
   mrb_define_const(mrb, mrb->kernel_module, "AT_STATX_FORCE_SYNC", mrb_int_value(mrb, AT_STATX_FORCE_SYNC));
+#endif
+#ifdef AT_STATX_DONT_SYNC
   mrb_define_const(mrb, mrb->kernel_module, "AT_STATX_DONT_SYNC", mrb_int_value(mrb, AT_STATX_DONT_SYNC));
+#endif
 
   io_uring_op_class = mrb_define_class_under_id(mrb, io_uring_class, mrb_intern_lit(mrb, "Operation"), mrb->object_class);
   MRB_SET_INSTANCE_TT(io_uring_op_class, MRB_TT_CDATA);
