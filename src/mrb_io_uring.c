@@ -3,26 +3,8 @@
 static mrb_value
 mrb_io_uring_queue_init_params(mrb_state *mrb, mrb_value self)
 {
-  printf("page_size: %ld\n", page_size);
   mrb_int fixed_buffer_size = MRB_IORING_DEFAULT_FIXED_BUFFER_SIZE, entries = 2048, flags = 0;
   mrb_get_args(mrb, "|iii", &fixed_buffer_size, &entries, &flags);
-  if (fixed_buffer_size < page_size) {
-#ifdef MRB_DEBUG
-      mrb_warn(mrb, "fixed_buffer_size '%i' too small, adjusting to page size: %i", fixed_buffer_size, page_size);
-#endif
-      fixed_buffer_size = page_size;
-  } else if (fixed_buffer_size > (1 << 30)) {
-#ifdef MRB_DEBUG
-      mrb_warn(mrb, "fixed_buffer_size '%i' too large, adjusting to max value: %i", fixed_buffer_size, (1 << 30));
-#endif
-      fixed_buffer_size = (1 << 30);
-  } else if (fixed_buffer_size % page_size != 0) {
-      long adjusted_fixed_buffer_size = (fixed_buffer_size / page_size) * page_size;
-#ifdef MRB_DEBUG
-      mrb_warn(mrb, "fixed_buffer_size '%i' not a multiple of page size, adjusting to nearest multiple: %i", fixed_buffer_size, adjusted_fixed_buffer_size);
-#endif
-      fixed_buffer_size = adjusted_fixed_buffer_size;
-  }
   if (unlikely(entries <= 0)) {
     mrb_raise(mrb, E_ARGUMENT_ERROR, "too few entries");
   }
@@ -104,6 +86,23 @@ mrb_io_uring_queue_init_params(mrb_state *mrb, mrb_value self)
     mrb_io_uring->at_statx_val = mrb_symbol_value(mrb_io_uring->at_statx_sym);
 
     if (can_use_buffers) {
+      if (fixed_buffer_size < page_size) {
+    #ifdef MRB_DEBUG
+          mrb_warn(mrb, "fixed_buffer_size '%i' too small, adjusting to page size: %i", fixed_buffer_size, page_size);
+    #endif
+          fixed_buffer_size = page_size;
+      } else if (fixed_buffer_size > (1 << 30)) {
+    #ifdef MRB_DEBUG
+          mrb_warn(mrb, "fixed_buffer_size '%i' too large, adjusting to max value: %i", fixed_buffer_size, (1 << 30));
+    #endif
+          fixed_buffer_size = (1 << 30);
+      } else if (fixed_buffer_size % page_size != 0) {
+          long adjusted_fixed_buffer_size = (fixed_buffer_size / page_size) * page_size;
+    #ifdef MRB_DEBUG
+          mrb_warn(mrb, "fixed_buffer_size '%i' not a multiple of page size, adjusting to nearest multiple: %i", fixed_buffer_size, adjusted_fixed_buffer_size);
+    #endif
+          fixed_buffer_size = adjusted_fixed_buffer_size;
+      }
       size_t max_buffers = MIN(limit.rlim_max / fixed_buffer_size, 16384);
       ret = io_uring_register_buffers_sparse(&mrb_io_uring->ring, max_buffers);
       if (likely(ret == 0)) {
