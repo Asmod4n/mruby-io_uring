@@ -18,13 +18,13 @@ assert ('Socket io') do
     server.listen(4096)
     io_uring.prep_accept(server)
     client = TCPSocket.new('127.0.0.1', server.addr[1])
-    io_uring.prep_send(client, "hello")
     i = 3
     while i > 0
         num_cqes = io_uring.wait(1, 1) do |operation|
             assert_nil(operation.errno, operation.inspect)
             case operation.type
             when :accept
+                io_uring.prep_send(client, "hello")
                 io_uring.prep_recv(operation.sock)
             when :recv
                 assert_equal(operation.buf, "hello")
