@@ -774,6 +774,34 @@ mrb_io_uring_prep_cancel(mrb_state *mrb, mrb_value self)
 }
 
 static mrb_value
+mrb_io_uring_prep_cancel_fd(mrb_state *mrb, mrb_value self)
+{
+  mrb_value operation;
+  mrb_int flags = IORING_ASYNC_CANCEL_FD, sqe_flags = 0;
+  mrb_get_args(mrb, "o|ii", &operation, &flags, &sqe_flags);
+  mrb_data_check_type(mrb, operation, &mrb_io_uring_operation_type);
+
+
+  mrb_io_uring_t *mrb_io_uring = DATA_PTR(self);
+  mrb_value argv[] = {
+    mrb_io_uring->at_ring_val,       self,
+    mrb_io_uring->at_type_val,       mrb_io_uring->cancel_val,
+    mrb_io_uring->at_operation_val,  operation
+  };
+  mrb_value cancel_operation = mrb_obj_new(mrb, mrb_io_uring->operation_class, NELEMS(argv), argv);
+  uint64_t encoded_operation = encode_operation_op(mrb, mrb_ptr(operation), MRB_IORING_OP_CANCEL);
+  mrb_data_init(operation, &encoded_operation, &mrb_io_uring_operation_type);
+
+  struct io_uring_sqe *sqe = mrb_io_uring_get_sqe(mrb, &mrb_io_uring->ring);
+  io_uring_sqe_set_flags(sqe, (unsigned int) sqe_flags);
+  io_uring_sqe_set_data64(sqe, encoded_operation);
+  io_uring_prep_cancel_fd(sqe, mrb_integer(mrb_convert_type(mrb, operation, MRB_TT_INTEGER, "Integer", "fileno")), (int) flags);
+  mrb_hash_set(mrb, mrb_io_uring->sqes, cancel_operation, cancel_operation);
+
+  return cancel_operation;
+}
+
+static mrb_value
 mrb_io_uring_prep_statx(mrb_state *mrb, mrb_value self)
 {
   mrb_value path = mrb_nil_value();
@@ -1487,14 +1515,15 @@ mrb_mruby_io_uring_gem_init(mrb_state* mrb)
   }
   if (io_uring_opcode_supported(probe, IORING_OP_ASYNC_CANCEL)) {
     mrb_define_method_id(mrb, io_uring_class, mrb_intern_lit(mrb, "prep_cancel"), mrb_io_uring_prep_cancel, MRB_ARGS_ARG(1, 2));
+    mrb_define_method_id(mrb, io_uring_class, mrb_intern_lit(mrb, "prep_cancel_fd"), mrb_io_uring_prep_cancel_fd, MRB_ARGS_ARG(1, 2));
   }
   io_uring_free_probe(probe);
   if (can_use_buffers) {
     mrb_define_method_id(mrb, io_uring_class, mrb_intern_lit(mrb, "fixed_buffer_size"),       mrb_io_uring_get_fixed_buffer_size,   MRB_ARGS_NONE());
     mrb_define_method_id(mrb, io_uring_class, mrb_intern_lit(mrb, "prep_read_fixed"),         mrb_io_uring_prep_read_fixed,         MRB_ARGS_ARG(1, 2));
-    mrb_define_method_id(mrb, io_uring_class, mrb_intern_lit(mrb, "return_used_buffer"),      mrb_io_uring_return_used_buffer,         MRB_ARGS_REQ(1));
+    mrb_define_method_id(mrb, io_uring_class, mrb_intern_lit(mrb, "return_used_buffer"),      mrb_io_uring_return_used_buffer,      MRB_ARGS_REQ(1));
   }
-  mrb_define_method_id(mrb, io_uring_class, mrb_intern_lit(mrb, "wait"),                    mrb_io_uring_submit_and_wait_timeout, MRB_ARGS_OPT(2)|MRB_ARGS_BLOCK());
+  mrb_define_method_id(mrb, io_uring_class,   mrb_intern_lit(mrb, "wait"),                     mrb_io_uring_submit_and_wait_timeout, MRB_ARGS_OPT(2)|MRB_ARGS_BLOCK());
   mrb_define_const_id (mrb, io_uring_class, mrb_intern_lit(mrb, "ASYNC_CANCEL_ALL"),        mrb_fixnum_value(IORING_ASYNC_CANCEL_ALL));
   mrb_define_const_id (mrb, io_uring_class, mrb_intern_lit(mrb, "ASYNC_CANCEL_FD"),         mrb_fixnum_value(IORING_ASYNC_CANCEL_FD));
   mrb_define_const_id (mrb, io_uring_class, mrb_intern_lit(mrb, "ASYNC_CANCEL_ANY"),        mrb_fixnum_value(IORING_ASYNC_CANCEL_ANY));

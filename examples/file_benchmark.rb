@@ -46,8 +46,8 @@ def measure_performance(ring, fd, filesize)
 end
 
 ring = IO::Uring.new
-ring.prep_openat2('file.txt', File.open(File.expand_path(File.dirname(__FILE__))))
-filesize = File.size(File.expand_path(File.dirname(__FILE__)) + '/file.txt')
+ring.prep_openat2('files/file.txt', File.open(File.expand_path(File.dirname(__FILE__))))
+filesize = File.size(File.expand_path(File.dirname(__FILE__)) + '/files/file.txt')
 fd = nil
 ring.wait(1, 1) do |operation|
   fd = operation.file
