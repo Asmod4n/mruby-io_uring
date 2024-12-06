@@ -1,5 +1,4 @@
 #include "mrb_io_uring.h"
-#include "liburing/io_uring.h"
 
 static mrb_value
 mrb_io_uring_queue_init_params(mrb_state *mrb, mrb_value self)
@@ -160,9 +159,13 @@ mrb_io_uring_buffer_get(mrb_state *mrb, mrb_io_uring_t *mrb_io_uring)
   }
 }
 
-static void
-mrb_io_uring_return_used_buffer(mrb_state *mrb, mrb_io_uring_t *mrb_io_uring, mrb_value operation)
+static mrb_value
+mrb_io_uring_return_used_buffer(mrb_state *mrb, mrb_value self)
 {
+  mrb_value operation;
+  mrb_get_args(mrb, "o", &operation);
+  mrb_data_check_type(mrb, operation, &mrb_io_uring_operation_type);
+  mrb_io_uring_t *mrb_io_uring = DATA_PTR(self);
   mrb_value index_val = mrb_iv_get(mrb, operation, mrb_io_uring->buf_index_sym);
   mrb_int index = mrb_as_int(mrb, index_val);
   if (unlikely(!mrb_string_p(mrb_ary_ref(mrb, mrb_io_uring->buffers, index)))) {
@@ -170,6 +173,8 @@ mrb_io_uring_return_used_buffer(mrb_state *mrb, mrb_io_uring_t *mrb_io_uring, mr
   }
 
   mrb_ary_push(mrb, mrb_io_uring->free_list, index_val);
+
+  return self;
 }
 
 static mrb_value
@@ -601,7 +606,7 @@ mrb_io_uring_prep_openat2(mrb_state *mrb, mrb_value self)
     dfd = (int) mrb_integer(mrb_convert_type(mrb, directory, MRB_TT_INTEGER, "Integer", "fileno"));
   }
   if (mrb_nil_p(open_how)) {
-    open_how = mrb_obj_new(mrb, mrb_class_get_under_id(mrb, mrb_class(mrb, self), mrb_intern_lit(mrb, "OpenHow")), 0, NULL);
+    open_how = mrb_obj_new(mrb, mrb_class_get_id(mrb, mrb_intern_lit(mrb, "OpenHow")), 0, NULL);
   }
 
   mrb_io_uring_t *mrb_io_uring = DATA_PTR(self);
@@ -621,7 +626,7 @@ mrb_io_uring_prep_openat2(mrb_state *mrb, mrb_value self)
 
   io_uring_sqe_set_data64(sqe, encoded_operation);
   io_uring_sqe_set_flags(sqe, (unsigned int) sqe_flags);
-  io_uring_prep_openat2(sqe, dfd, mrb_string_value_cstr(mrb, &path), mrb_data_get_ptr(mrb, open_how, &mrb_io_uring_open_how_type));
+  io_uring_prep_openat2(sqe, dfd, RSTRING_CSTR(mrb, path), mrb_data_get_ptr(mrb, open_how, &mrb_io_uring_open_how_type));
   mrb_obj_freeze(mrb, path);
   mrb_hash_set(mrb, mrb_io_uring->sqes, operation, operation);
 
@@ -771,10 +776,19 @@ mrb_io_uring_prep_cancel(mrb_state *mrb, mrb_value self)
 static mrb_value
 mrb_io_uring_prep_statx(mrb_state *mrb, mrb_value self)
 {
-  mrb_value path;
+  mrb_value path = mrb_nil_value();
   mrb_value directory = mrb_nil_value();
   mrb_int flags = 0, mask = STATX_BASIC_STATS | STATX_BTIME, sqe_flags = 0;
-  mrb_get_args(mrb, "S|oiio", &path, &directory, &flags, &mask, &sqe_flags);
+  mrb_get_args(mrb, "S!|oiio", &path, &directory, &flags, &mask, &sqe_flags);
+  const char *path_str = "";
+  mrb_value path_was_frozen = mrb_false_value();
+  if (mrb_nil_p(path)) {
+    flags |= AT_EMPTY_PATH;
+  } else {
+    path_str = RSTRING_CSTR(mrb, path);
+    path_was_frozen = mrb_bool_value(mrb_frozen_p(mrb_basic_ptr(path)));
+    mrb_obj_freeze(mrb, path);
+  }
   int dfd = AT_FDCWD;
   if(!mrb_nil_p(directory)) {
     dfd = mrb_integer(mrb_convert_type(mrb, directory, MRB_TT_INTEGER, "Integer", "fileno"));
@@ -791,9 +805,10 @@ mrb_io_uring_prep_statx(mrb_state *mrb, mrb_value self)
     mrb_io_uring->at_type_val,        mrb_io_uring->statx_val,
     mrb_io_uring->at_path_val,        path,
     mrb_io_uring->at_directory_val,   directory,
-    mrb_io_uring->path_was_frozen_val,mrb_bool_value(mrb_frozen_p((mrb_basic_ptr(path)))),
+    mrb_io_uring->path_was_frozen_val, path_was_frozen,
     mrb_io_uring->at_statx_val,      statx
   };
+  mrb_obj_freeze(mrb, path);
   mrb_value operation = mrb_obj_new(mrb, mrb_io_uring->operation_class, NELEMS(argv), argv);
   uint64_t encoded_operation = encode_operation_op(mrb, mrb_ptr(operation), MRB_IORING_OP_STATX);
   mrb_data_init(operation, &encoded_operation, &mrb_io_uring_operation_type);
@@ -802,11 +817,10 @@ mrb_io_uring_prep_statx(mrb_state *mrb, mrb_value self)
 
   io_uring_sqe_set_data64(sqe, encoded_operation);
   io_uring_sqe_set_flags(sqe, (unsigned int) sqe_flags);
-  io_uring_prep_statx(sqe, dfd, mrb_string_value_cstr(mrb, &path), flags, mask, statxbuf);
-  mrb_obj_freeze(mrb, path);
+  io_uring_prep_statx(sqe, dfd, path_str, flags, mask, statxbuf);
   mrb_hash_set(mrb, mrb_io_uring->sqes, operation, operation);
 
-  return self;
+  return operation;
 }
 
 static void
@@ -849,9 +863,7 @@ static mrb_value
 mrb_statx_for_statx(mrb_state *mrb, mrb_value self)
 {
   mrb_statx_set_intance_variables(mrb, self, DATA_PTR(self));
-  mrb_funcall_id(mrb, self, mrb_intern_lit(mrb, "convert_timestamps"), 0);
-
-  return self;
+  return mrb_funcall_id(mrb, self, mrb_intern_lit(mrb, "convert_timestamps"), 0);
 }
 
 static mrb_value
@@ -860,8 +872,7 @@ mrb_statx_initialize(mrb_state *mrb, mrb_value self)
   const char *path;
   mrb_value dirfd = mrb_nil_value();
   mrb_int flags = 0, mask = STATX_BASIC_STATS | STATX_BTIME;
-  struct statx stx;
-  memset(&stx, '\0', sizeof(stx));
+  struct statx stx = {0};
 
   mrb_get_args(mrb, "z|oii", &path, &dirfd, &flags, &mask);
   int dfd = AT_FDCWD;
@@ -932,25 +943,21 @@ mrb_io_uring_process_cqe(mrb_state *mrb, mrb_io_uring_t *mrb_io_uring, struct io
       case MRB_IORING_OP_OPENAT2: {
         mrb_iv_set(mrb, operation, mrb_io_uring->at_file_sym, res);
         mrb_value path = mrb_iv_get(mrb, operation, mrb_io_uring->at_path_sym);
-        if (likely(mrb_string_p(path))) {
+        if (mrb_string_p(path)) {
           mrb_value path_was_frozen = mrb_iv_get(mrb, operation, mrb_io_uring->path_was_frozen_sym);
           if (!mrb_bool(path_was_frozen)) {
             MRB_UNSET_FROZEN_FLAG(mrb_basic_ptr((path)));
           }
-        } else {
-          mrb_raise(mrb, E_TYPE_ERROR, "path is not a string");
         }
       } break;
       case MRB_IORING_OP_STATX: {
         mrb_value statx = mrb_iv_get(mrb, operation, mrb_io_uring->at_statx_sym);
         mrb_value path = mrb_iv_get(mrb, operation, mrb_io_uring->at_path_sym);
-        if (likely(mrb_string_p(path))) {
+        if (mrb_string_p(path)) {
           mrb_value path_was_frozen = mrb_iv_get(mrb, operation, mrb_io_uring->path_was_frozen_sym);
           if (!mrb_bool(path_was_frozen)) {
             MRB_UNSET_FROZEN_FLAG(mrb_basic_ptr((path)));
           }
-        } else {
-          mrb_raise(mrb, E_TYPE_ERROR, "path is not a string");
         }
         mrb_statx_for_statx(mrb, statx);
       } break;
@@ -981,9 +988,6 @@ mrb_io_uring_iterate_over_cqes(mrb_state *mrb, mrb_io_uring_t *mrb_io_uring, mrb
     io_uring_for_each_cqe(&mrb_io_uring->ring, head, cqe) {
       mrb_value operation = mrb_io_uring_process_cqe(mrb, mrb_io_uring, cqe);
       mrb_yield(mrb, block, operation);
-      if (decode_op(io_uring_cqe_get_data64(cqe)) == MRB_IORING_OP_READ_FIXED)  {
-        mrb_io_uring_return_used_buffer(mrb, mrb_io_uring, operation);
-      }
       if (!(cqe->flags & IORING_CQE_F_MORE)) {
         mrb_hash_delete_key(mrb, mrb_io_uring->sqes, operation);
       }
@@ -1049,7 +1053,7 @@ mrb_io_uring_parse_flags_string(mrb_state *mrb, mrb_value flags_val)
   if (mrb_nil_p(flags_val)) {
     return 0;
   }
-  const char *flags_str = mrb_string_value_cstr(mrb, &flags_val);
+  const char *flags_str = RSTRING_CSTR(mrb, flags_val);
 
   __u64 flags = 0;
   mrb_bool seen_plus = FALSE;
@@ -1175,7 +1179,7 @@ static __u64 mrb_io_uring_parse_resolve_string(mrb_state *mrb, mrb_value resolve
   if (mrb_nil_p(resolve)) {
     return 0;
   }
-  const char *resolve_str = mrb_string_value_cstr(mrb, &resolve);
+  const char *resolve_str = RSTRING_CSTR(mrb, resolve);
 
   __u64 resolve_flags = 0;
 
@@ -1338,8 +1342,7 @@ mrb_io_uring_operation_to_io(mrb_state *mrb, mrb_value self)
               socket_class = mrb_class_get_id(mrb, mrb_intern_lit(mrb, "IPSocket"));
             }
           }
-        }
-        break;
+        } break;
       default: {
         socket_class = mrb_class_get_id(mrb, mrb_intern_lit(mrb, "BasicSocket"));
       }
@@ -1420,7 +1423,7 @@ mrb_mruby_io_uring_gem_init(mrb_state* mrb)
     if (can_use_buffers) {
       page_size = sysconf(_SC_PAGESIZE);
       if (page_size <= 0) {
-        mrb_bug(mrb, "broken linux distro, returns a page size of 0 or less");
+        mrb_bug(mrb, "broken linux distro, returns a non positive page size");
       }
     }
     initialize_high_bits_check_once(mrb);
@@ -1489,6 +1492,7 @@ mrb_mruby_io_uring_gem_init(mrb_state* mrb)
   if (can_use_buffers) {
     mrb_define_method_id(mrb, io_uring_class, mrb_intern_lit(mrb, "fixed_buffer_size"),       mrb_io_uring_get_fixed_buffer_size,   MRB_ARGS_NONE());
     mrb_define_method_id(mrb, io_uring_class, mrb_intern_lit(mrb, "prep_read_fixed"),         mrb_io_uring_prep_read_fixed,         MRB_ARGS_ARG(1, 2));
+    mrb_define_method_id(mrb, io_uring_class, mrb_intern_lit(mrb, "return_used_buffer"),      mrb_io_uring_return_used_buffer,         MRB_ARGS_REQ(1));
   }
   mrb_define_method_id(mrb, io_uring_class, mrb_intern_lit(mrb, "wait"),                    mrb_io_uring_submit_and_wait_timeout, MRB_ARGS_OPT(2)|MRB_ARGS_BLOCK());
   mrb_define_const_id (mrb, io_uring_class, mrb_intern_lit(mrb, "ASYNC_CANCEL_ALL"),        mrb_fixnum_value(IORING_ASYNC_CANCEL_ALL));
@@ -1511,7 +1515,7 @@ mrb_mruby_io_uring_gem_init(mrb_state* mrb)
   io_uring_error_class = mrb_define_class_under_id(mrb, io_uring_class, mrb_intern_lit(mrb, "Error"), mrb->eStandardError_class);
   mrb_define_class_under(mrb, io_uring_class, "SQRingFullError",  io_uring_error_class);
 
-  io_uring_open_how_class = mrb_define_class_under_id(mrb, io_uring_class, mrb_intern_lit(mrb, "OpenHow"), mrb->object_class);
+  io_uring_open_how_class = mrb_define_class_id(mrb, mrb_intern_lit(mrb, "OpenHow"), mrb->object_class);
   MRB_SET_INSTANCE_TT(io_uring_open_how_class, MRB_TT_CDATA);
   mrb_define_method_id(mrb, io_uring_open_how_class, mrb_intern_lit(mrb, "initialize"), mrb_io_uring_open_how_init, MRB_ARGS_OPT(3));
 

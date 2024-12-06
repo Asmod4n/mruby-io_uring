@@ -33,7 +33,8 @@ class IO::Uring::Operation
       operation: @operation,
       res: @res,
       flags: @flags,
-      errno: @errno
+      errno: @errno,
+      userdata: @userdata
     }
 
     existing_attrs = attrs.reject { |_, v| v.nil? }

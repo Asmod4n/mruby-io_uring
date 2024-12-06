@@ -13,6 +13,7 @@ class Statx
         # Combine major and minor numbers
         @rdev = major_minor(@rdev_major, @rdev_minor)
         @dev = major_minor(@dev_major, @dev_minor)
+        self
     end
 
     private

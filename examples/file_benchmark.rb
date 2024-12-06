@@ -28,6 +28,7 @@ def measure_performance(ring, fd, filesize)
       case operation.type
       when :read_fixed
         read_bytes += operation.res
+        ring.return_used_buffer(operation)
       else
         raise "unkown operation: #{operation.inspect}"
       end
