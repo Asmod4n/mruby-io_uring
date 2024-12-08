@@ -28,6 +28,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/syscall.h>
+#include <mruby/presym.h>
 
 #ifndef NSEC_PER_SEC
 #define NSEC_PER_SEC 1000000000
@@ -43,53 +44,6 @@ typedef struct {
   struct io_uring_params params;
   mrb_value sqes;
   struct RClass *operation_class;
-  mrb_value at_ring_val;
-  mrb_value at_type_val;
-  mrb_sym at_sock_sym;
-  mrb_value at_sock_val;
-  mrb_sym at_buf_sym;
-  mrb_value at_buf_val;
-  mrb_value at_poll_mask_val;
-  mrb_sym at_file_sym;
-  mrb_value at_file_val;
-  mrb_sym at_path_sym;
-  mrb_value at_path_val;
-  mrb_value at_directory_val;
-  mrb_value at_open_how_val;
-  mrb_value at_operation_val;
-  mrb_sym at_res_sym;
-  mrb_sym at_flags_sym;
-  mrb_sym at_errno_sym;
-  mrb_sym at_userdata_sym;
-  mrb_value at_userdata_val;
-  mrb_sym buf_index_sym;
-  mrb_value buf_index_val;
-  mrb_value socket_val;
-  mrb_value accept_val;
-  mrb_value multishot_accept_val;
-  mrb_value connect_val;
-  mrb_value at_addrinfo_val;
-  mrb_value recv_val;
-  mrb_value splice_val;
-  mrb_value send_val;
-  mrb_sym buf_was_frozen_sym;
-  mrb_value buf_was_frozen_val;
-  mrb_sym path_was_frozen_sym;
-  mrb_value path_was_frozen_val;
-  mrb_value shutdown_val;
-  mrb_value close_val;
-  mrb_value poll_add_val;
-  mrb_value poll_multishot_val;
-  mrb_value poll_update_val;
-  mrb_value openat2_val;
-  mrb_value read_val;
-  mrb_value read_fixed_val;
-  mrb_value write_val;
-  mrb_value cancel_val;
-  mrb_sym statx_sym;
-  mrb_value statx_val;
-  mrb_sym at_statx_sym;
-  mrb_value at_statx_val;
   mrb_int fixed_buffer_size;
   mrb_value buffers;
   mrb_value free_list;
