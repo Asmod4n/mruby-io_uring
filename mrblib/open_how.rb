@@ -1,3 +1,3 @@
-class IO::Uring::OpenHow
+class OpenHow
   attr_reader :flags, :mode, :resolve
 end
