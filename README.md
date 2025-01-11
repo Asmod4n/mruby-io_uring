@@ -20,7 +20,7 @@ Since there are numerous versions of liburing around we are shipping a version w
 String ownership
 ----------------
 
-Functions which end in _fixed use a internal and private buffer pool, those buffers are mruby Strings and belong to the ring, not to you.
+Functions which end in _fixed use a internal and private buffer pool, those buffers are mruby Strings and belong to the ring, not to you, they are frozen at all times and you musn't change their contents.
 
 When you are done with a fixed buffer you have to return them to the ring with ring.return_used_buffer(operation), take a look at the file_benchmark.rb in the example dir for a example.
 Performance of _fixed functions can be much higher.
@@ -46,7 +46,7 @@ while true
     raise operation.errno if operation.errno
     case operation.type
     when :multishot_accept
-      puts "Remote Address: #{operation.to_tcpsocket.remote_address.inspect}"
+      puts "Remote Address: #{operation.to_io.remote_address.inspect}"
       puts "Socket        : #{operation.res}"
       uring.prep_recv(operation.res)
       #operation.res  is the accepted socket
