@@ -113,3 +113,7 @@ static mrb_bool init_once_done = FALSE;
 static pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 static mrb_bool can_use_buffers = FALSE;
 #define MRB_IORING_DEFAULT_FIXED_BUFFER_SIZE 65536
+
+#ifndef MRB_UNSET_FROZEN_FLAG
+#define MRB_UNSET_FROZEN_FLAG(o) ((o)->frozen = 0)
+#endif
