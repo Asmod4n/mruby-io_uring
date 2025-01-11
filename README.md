@@ -17,41 +17,12 @@ to add it to your build_config.rb
 
 Since there are numerous versions of liburing around we are shipping a version which is compatible with this gem.
 
-
-Supported functions
-===================
-
-At the moment the following functions are implemented.
-```c
-io_uring_queue_init_params
-io_uring_submit
-io_uring_prep_socket
-io_uring_prep_accept
-io_uring_prep_accept_multishot
-io_uring_prep_connect
-io_uring_prep_recv
-io_uring_prep_splice
-io_uring_prep_send
-io_uring_prep_shutdown
-io_uring_prep_close
-io_uring_prep_poll_add
-io_uring_prep_poll_multishot
-io_uring_prep_openat2
-io_uring_prep_read
-io_uring_prep_read_fixed
-io_uring_prep_write
-io_uring_prep_cancel
-io_uring_submit_and_wait_timeout
-```
-
 String ownership
 ----------------
 
-Functions which end in _fixed use a internal and private buffer pool, those buffers are mruby Strings and belong to the ring, not the user.
+Functions which end in _fixed use a internal and private buffer pool, those buffers are mruby Strings and belong to the ring, not to you.
 
-You musnt't change them, they expire when the block from ring.wait ends and the contents will be changed once you use another _fixed function.
-If you need to hold a reference to a buffer string after the block you got it in expires you need to call the same function without the _fixed suffix.
-
+When you are done with a fixed buffer you have to return them to the ring with ring.return_used_buffer(operation), take a look at the file_benchmark.rb in the example dir for a example.
 Performance of _fixed functions can be much higher.
 
 Every other function which takes a string argument freezes that string till io_uring has processed it and given back to you in a ring.wait block, where its unfrozen. If you gave the ring a frozen string, it returns frozen back to you.
@@ -160,7 +131,7 @@ We check what type the underlaying socket is and give you a appropiate one back,
 
 LICENSE
 =======
-Copyright 2024 Hendrik Beskow
+Copyright 2024, 2025 Hendrik Beskow
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this project except in compliance with the License.

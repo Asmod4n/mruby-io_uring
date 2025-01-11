@@ -12,12 +12,12 @@ def measure_performance(ring, fd, filesize)
   start = Chrono::Steady.now
   while (Chrono::Steady.now - start) < 1
     # Issue the prep_read_fixed function calls
-    ring.prep_read_fixed(fd, current_pos)
-    current_pos += ring.fixed_buffer_size
     (num_operations - 1).times do
       ring.prep_read_fixed(fd, current_pos, IO::Uring::Operation::SQE_IO_LINK)
       current_pos += ring.fixed_buffer_size
     end
+    ring.prep_read_fixed(fd, current_pos)
+    current_pos += ring.fixed_buffer_size
 
     # Run ring.wait with the number of completion queue events to wait for
     ring.wait(num_operations, 1) do |operation|

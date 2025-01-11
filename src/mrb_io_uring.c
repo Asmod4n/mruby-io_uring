@@ -807,29 +807,29 @@ mrb_io_uring_prep_statx(mrb_state *mrb, mrb_value self)
 static void
 mrb_statx_set_intance_variables(mrb_state *mrb, mrb_value self, struct statx *stx)
 {
-mrb_iv_set(mrb, self, MRB_IVSYM(mask), mrb_int_value(mrb, stx->stx_mask));
-mrb_iv_set(mrb, self, MRB_IVSYM(blksize), mrb_int_value(mrb, stx->stx_blksize));
-mrb_iv_set(mrb, self, MRB_IVSYM(attributes), mrb_int_value(mrb, stx->stx_attributes));
-mrb_iv_set(mrb, self, MRB_IVSYM(nlink), mrb_int_value(mrb, stx->stx_nlink));
-mrb_iv_set(mrb, self, MRB_IVSYM(uid), mrb_int_value(mrb, stx->stx_uid));
-mrb_iv_set(mrb, self, MRB_IVSYM(gid), mrb_int_value(mrb, stx->stx_gid));
-mrb_iv_set(mrb, self, MRB_IVSYM(mode), mrb_int_value(mrb, stx->stx_mode));
-mrb_iv_set(mrb, self, MRB_IVSYM(ino), mrb_int_value(mrb, stx->stx_ino));
-mrb_iv_set(mrb, self, MRB_IVSYM(size), mrb_int_value(mrb, stx->stx_size));
-mrb_iv_set(mrb, self, MRB_IVSYM(blocks), mrb_int_value(mrb, stx->stx_blocks));
-mrb_iv_set(mrb, self, MRB_IVSYM(attributes_mask), mrb_int_value(mrb, stx->stx_attributes_mask));
-mrb_iv_set(mrb, self, MRB_IVSYM(atime_sec), mrb_int_value(mrb, stx->stx_atime.tv_sec));
-mrb_iv_set(mrb, self, MRB_IVSYM(atime_nsec), mrb_int_value(mrb, stx->stx_atime.tv_nsec));
-mrb_iv_set(mrb, self, MRB_IVSYM(btime_sec), mrb_int_value(mrb, stx->stx_btime.tv_sec));
-mrb_iv_set(mrb, self, MRB_IVSYM(btime_nsec), mrb_int_value(mrb, stx->stx_btime.tv_nsec));
-mrb_iv_set(mrb, self, MRB_IVSYM(ctime_sec), mrb_int_value(mrb, stx->stx_ctime.tv_sec));
-mrb_iv_set(mrb, self, MRB_IVSYM(ctime_nsec), mrb_int_value(mrb, stx->stx_ctime.tv_nsec));
-mrb_iv_set(mrb, self, MRB_IVSYM(mtime_sec), mrb_int_value(mrb, stx->stx_mtime.tv_sec));
-mrb_iv_set(mrb, self, MRB_IVSYM(mtime_nsec), mrb_int_value(mrb, stx->stx_mtime.tv_nsec));
-mrb_iv_set(mrb, self, MRB_IVSYM(rdev_major), mrb_int_value(mrb, stx->stx_rdev_major));
-mrb_iv_set(mrb, self, MRB_IVSYM(rdev_minor), mrb_int_value(mrb, stx->stx_rdev_minor));
-mrb_iv_set(mrb, self, MRB_IVSYM(dev_major), mrb_int_value(mrb, stx->stx_dev_major));
-mrb_iv_set(mrb, self, MRB_IVSYM(dev_minor), mrb_int_value(mrb, stx->stx_dev_minor));
+  mrb_iv_set(mrb, self, MRB_IVSYM(mask), mrb_int_value(mrb, stx->stx_mask));
+  mrb_iv_set(mrb, self, MRB_IVSYM(blksize), mrb_int_value(mrb, stx->stx_blksize));
+  mrb_iv_set(mrb, self, MRB_IVSYM(attributes), mrb_int_value(mrb, stx->stx_attributes));
+  mrb_iv_set(mrb, self, MRB_IVSYM(nlink), mrb_int_value(mrb, stx->stx_nlink));
+  mrb_iv_set(mrb, self, MRB_IVSYM(uid), mrb_int_value(mrb, stx->stx_uid));
+  mrb_iv_set(mrb, self, MRB_IVSYM(gid), mrb_int_value(mrb, stx->stx_gid));
+  mrb_iv_set(mrb, self, MRB_IVSYM(mode), mrb_int_value(mrb, stx->stx_mode));
+  mrb_iv_set(mrb, self, MRB_IVSYM(ino), mrb_int_value(mrb, stx->stx_ino));
+  mrb_iv_set(mrb, self, MRB_IVSYM(size), mrb_int_value(mrb, stx->stx_size));
+  mrb_iv_set(mrb, self, MRB_IVSYM(blocks), mrb_int_value(mrb, stx->stx_blocks));
+  mrb_iv_set(mrb, self, MRB_IVSYM(attributes_mask), mrb_int_value(mrb, stx->stx_attributes_mask));
+  mrb_iv_set(mrb, self, MRB_IVSYM(atime_sec), mrb_int_value(mrb, stx->stx_atime.tv_sec));
+  mrb_iv_set(mrb, self, MRB_IVSYM(atime_nsec), mrb_int_value(mrb, stx->stx_atime.tv_nsec));
+  mrb_iv_set(mrb, self, MRB_IVSYM(btime_sec), mrb_int_value(mrb, stx->stx_btime.tv_sec));
+  mrb_iv_set(mrb, self, MRB_IVSYM(btime_nsec), mrb_int_value(mrb, stx->stx_btime.tv_nsec));
+  mrb_iv_set(mrb, self, MRB_IVSYM(ctime_sec), mrb_int_value(mrb, stx->stx_ctime.tv_sec));
+  mrb_iv_set(mrb, self, MRB_IVSYM(ctime_nsec), mrb_int_value(mrb, stx->stx_ctime.tv_nsec));
+  mrb_iv_set(mrb, self, MRB_IVSYM(mtime_sec), mrb_int_value(mrb, stx->stx_mtime.tv_sec));
+  mrb_iv_set(mrb, self, MRB_IVSYM(mtime_nsec), mrb_int_value(mrb, stx->stx_mtime.tv_nsec));
+  mrb_iv_set(mrb, self, MRB_IVSYM(rdev_major), mrb_int_value(mrb, stx->stx_rdev_major));
+  mrb_iv_set(mrb, self, MRB_IVSYM(rdev_minor), mrb_int_value(mrb, stx->stx_rdev_minor));
+  mrb_iv_set(mrb, self, MRB_IVSYM(dev_major), mrb_int_value(mrb, stx->stx_dev_major));
+  mrb_iv_set(mrb, self, MRB_IVSYM(dev_minor), mrb_int_value(mrb, stx->stx_dev_minor));
 
 #ifdef STATX_MNT_ID
   mrb_iv_set(mrb, self, MRB_IVSYM(mnt_id), mrb_int_value(mrb, stx->stx_mnt_id));
@@ -956,7 +956,7 @@ mrb_io_uring_iterate_over_cqes(mrb_state *mrb, mrb_io_uring_t *mrb_io_uring, mrb
 {
   struct mrb_jmpbuf* prev_jmp = mrb->jmp;
   struct mrb_jmpbuf c_jmp;
-  unsigned int i = 0;
+  unsigned int nr = 0;
 
   MRB_TRY(&c_jmp)
   {
@@ -971,15 +971,15 @@ mrb_io_uring_iterate_over_cqes(mrb_state *mrb, mrb_io_uring_t *mrb_io_uring, mrb
         mrb_hash_delete_key(mrb, mrb_io_uring->sqes, operation);
       }
       mrb_gc_arena_restore(mrb, arena_index);
-      i++;
+      nr++;
     }
-    io_uring_cq_advance(&mrb_io_uring->ring, i);
+    io_uring_cq_advance(&mrb_io_uring->ring, nr);
     mrb->jmp = prev_jmp;
   }
   MRB_CATCH(&c_jmp)
   {
     mrb->jmp = prev_jmp;
-    io_uring_cq_advance(&mrb_io_uring->ring, i);
+    io_uring_cq_advance(&mrb_io_uring->ring, nr);
     MRB_THROW(mrb->jmp);
   }
   MRB_END_EXC(&c_jmp);
@@ -1154,7 +1154,9 @@ mrb_io_uring_parse_flags_string(mrb_state *mrb, mrb_value flags_val)
   return flags;
 }
 
-static __u64 mrb_io_uring_parse_resolve_string(mrb_state *mrb, mrb_value resolve) {
+static __u64
+mrb_io_uring_parse_resolve_string(mrb_state *mrb, mrb_value resolve)
+{
   if (mrb_nil_p(resolve)) {
     return 0;
   }
@@ -1318,12 +1320,12 @@ mrb_io_uring_operation_to_io(mrb_state *mrb, mrb_value self)
               socket_class = mrb_class_get_id(mrb, MRB_SYM(UDPSocket));
               break;
             default: {
-              socket_class = mrb_class_get_id(mrb, MRB_SYM(IPSocket));
+              socket_class = mrb_class_get_id(mrb, MRB_SYM(Socket));
             }
           }
         } break;
       default: {
-        socket_class = mrb_class_get_id(mrb, MRB_SYM(BasicSocket));
+        socket_class = mrb_class_get_id(mrb, MRB_SYM(Socket));
       }
     }
 
@@ -1390,6 +1392,67 @@ initialize_high_bits_check_once(mrb_state *mrb)
     pthread_mutex_unlock(&mutex);
     mrb_exc_raise(mrb, mrb_obj_value(mrb->nomem_err));
   }
+}
+
+#ifdef _WIN32
+#ifdef _MSC_VER
+/* Win32 platform do not provide gmtime_r/localtime_r; emulate them using gmtime_s/localtime_s */
+#define gmtime_r(tp, tm)    ((gmtime_s((tm), (tp)) == 0) ? (tm) : NULL)
+#else
+#define NO_GMTIME_R
+#endif
+#endif
+#ifdef __STRICT_ANSI__
+/* Strict ANSI (e.g. -std=c99) do not provide gmtime_r/localtime_r */
+#define NO_GMTIME_R
+#endif
+
+#ifdef NO_GMTIME_R
+#define gmtime_r(t,r) gmtime(t)
+#define localtime_r(t,r) localtime(t)
+#endif
+
+static mrb_value
+time_httpdate(mrb_state *mrb, mrb_value self)
+{
+  mrb_int timer = mrb_integer(mrb_convert_type(mrb, mrb_funcall_id(mrb, self, MRB_SYM(gmtime), 0), MRB_TT_INTEGER, "Integer", "to_i"));
+  struct tm tp;
+  struct tm *tm = gmtime_r(&timer, &tp);
+  if (unlikely(!tm)) {
+    mrb_sys_fail(mrb, "gmtime_r");
+  }
+  static const char *wday_name[] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
+  static const char *mon_name[] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
+  mrb_value httpdate = mrb_str_new(mrb, NULL, 29);
+  char *ptr = RSTRING_PTR(httpdate);
+
+  memcpy(ptr, wday_name[tm->tm_wday], 3);
+  ptr += 3;
+  *ptr++ = ',';
+  *ptr++ = ' ';
+  *ptr++ = '0' + (tm->tm_mday / 10);
+  *ptr++ = '0' + (tm->tm_mday % 10);
+  *ptr++ = ' ';
+  memcpy(ptr, mon_name[tm->tm_mon], 3);
+  ptr += 3;
+  *ptr++ = ' ';
+  *ptr++ = '0' + ((tm->tm_year + 1900) / 1000 % 10);
+  *ptr++ = '0' + ((tm->tm_year + 1900) / 100 % 10);
+  *ptr++ = '0' + ((tm->tm_year + 1900) / 10 % 10);
+  *ptr++ = '0' + ((tm->tm_year + 1900) % 10);
+  *ptr++ = ' ';
+  *ptr++ = '0' + (tm->tm_hour / 10);
+  *ptr++ = '0' + (tm->tm_hour % 10);
+  *ptr++ = ':';
+  *ptr++ = '0' + (tm->tm_min / 10);
+  *ptr++ = '0' + (tm->tm_min % 10);
+  *ptr++ = ':';
+  *ptr++ = '0' + (tm->tm_sec / 10);
+  *ptr++ = '0' + (tm->tm_sec % 10);
+  *ptr++ = ' ';
+  memcpy(ptr, "GMT", 3);
+
+  return httpdate;
 }
 
 void
@@ -1585,6 +1648,9 @@ mrb_mruby_io_uring_gem_init(mrb_state* mrb)
   mrb_define_method_id(mrb, io_uring_op_class, MRB_SYM(to_io),                mrb_io_uring_operation_to_io,  MRB_ARGS_NONE());
   mrb_define_method_id(mrb, io_uring_op_class, MRB_SYM_Q(readable),            mrb_uring_readable, MRB_ARGS_NONE());
   mrb_define_method_id(mrb, io_uring_op_class, MRB_SYM_Q(writable),            mrb_uring_writable, MRB_ARGS_NONE());
+
+  struct RClass *time = mrb_class_get_id(mrb, MRB_SYM(Time));
+  mrb_define_method_id(mrb, time, MRB_SYM(httpdate), time_httpdate, MRB_ARGS_NONE());
 }
 
 void mrb_mruby_io_uring_gem_final(mrb_state* mrb) {}
