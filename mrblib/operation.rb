@@ -18,6 +18,14 @@ class IO::Uring::Operation
     flags & CQE_F_NOTIF != 0
   end
 
+  def fileno
+    if @sock
+      @sock.fileno
+    elsif @file
+      @file.fileno
+    end
+  end
+
   def inspect
     attrs = {
       ring: @ring,
