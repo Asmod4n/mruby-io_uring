@@ -863,7 +863,8 @@ mrb_statx_initialize(mrb_state *mrb, mrb_value self)
     mrb_sys_fail(mrb, "statx");
   }
 
-  return mrb_statx_for_statx(mrb, self);
+  mrb_statx_set_intance_variables(mrb, self, &stx);
+  return mrb_funcall_id(mrb, self, MRB_SYM(convert_timestamps), 0);
 }
 
 static mrb_value
@@ -884,6 +885,7 @@ mrb_io_uring_process_cqe(mrb_state *mrb, mrb_io_uring_t *mrb_io_uring, struct io
         if (likely(mrb_string_p(buf))) {
           struct RString *buf_str = mrb_str_ptr(buf);
           RSTR_UNSET_SINGLE_BYTE_FLAG(buf_str);
+          mrb_assert(RSTRING_CAPA(buf) <= cqe->res);
           RSTR_SET_LEN(buf_str, cqe->res);
         } else {
           mrb_raise(mrb, E_TYPE_ERROR, "buf not found");

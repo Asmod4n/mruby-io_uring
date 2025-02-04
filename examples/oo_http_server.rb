@@ -194,7 +194,7 @@ class SendBufState
     attr_reader :connection, :buf, :bufsize
     attr_accessor :already_sent
     def initialize(connection, buf)
-        @connection, @buf, = connection, buf
+        @connection, @buf = connection, buf
         @bufsize = buf.bytesize
         @already_sent = 0
     end
