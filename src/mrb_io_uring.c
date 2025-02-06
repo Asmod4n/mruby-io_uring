@@ -623,7 +623,6 @@ mrb_io_uring_prep_read(mrb_state *mrb, mrb_value self)
   RSTRING_PTR(buf), RSTRING_CAPA(buf),
   (unsigned long long) offset);
   mrb_hash_set(mrb, mrb_io_uring->sqes, operation, operation);
-  mrb_obj_freeze(mrb, buf);
 
   return operation;
 }
@@ -803,46 +802,46 @@ mrb_io_uring_prep_statx(mrb_state *mrb, mrb_value self)
 }
 
 static void
-mrb_statx_set_intance_variables(mrb_state *mrb, mrb_value self, struct statx *stx)
+mrb_statx_set_intance_variables(mrb_state *mrb, mrb_value statx, struct statx *stx)
 {
-  mrb_iv_set(mrb, self, MRB_IVSYM(mask), mrb_int_value(mrb, stx->stx_mask));
-  mrb_iv_set(mrb, self, MRB_IVSYM(blksize), mrb_int_value(mrb, stx->stx_blksize));
-  mrb_iv_set(mrb, self, MRB_IVSYM(attributes), mrb_int_value(mrb, stx->stx_attributes));
-  mrb_iv_set(mrb, self, MRB_IVSYM(nlink), mrb_int_value(mrb, stx->stx_nlink));
-  mrb_iv_set(mrb, self, MRB_IVSYM(uid), mrb_int_value(mrb, stx->stx_uid));
-  mrb_iv_set(mrb, self, MRB_IVSYM(gid), mrb_int_value(mrb, stx->stx_gid));
-  mrb_iv_set(mrb, self, MRB_IVSYM(mode), mrb_int_value(mrb, stx->stx_mode));
-  mrb_iv_set(mrb, self, MRB_IVSYM(ino), mrb_int_value(mrb, stx->stx_ino));
-  mrb_iv_set(mrb, self, MRB_IVSYM(size), mrb_int_value(mrb, stx->stx_size));
-  mrb_iv_set(mrb, self, MRB_IVSYM(blocks), mrb_int_value(mrb, stx->stx_blocks));
-  mrb_iv_set(mrb, self, MRB_IVSYM(attributes_mask), mrb_int_value(mrb, stx->stx_attributes_mask));
-  mrb_iv_set(mrb, self, MRB_IVSYM(atime_sec), mrb_int_value(mrb, stx->stx_atime.tv_sec));
-  mrb_iv_set(mrb, self, MRB_IVSYM(atime_nsec), mrb_int_value(mrb, stx->stx_atime.tv_nsec));
-  mrb_iv_set(mrb, self, MRB_IVSYM(btime_sec), mrb_int_value(mrb, stx->stx_btime.tv_sec));
-  mrb_iv_set(mrb, self, MRB_IVSYM(btime_nsec), mrb_int_value(mrb, stx->stx_btime.tv_nsec));
-  mrb_iv_set(mrb, self, MRB_IVSYM(ctime_sec), mrb_int_value(mrb, stx->stx_ctime.tv_sec));
-  mrb_iv_set(mrb, self, MRB_IVSYM(ctime_nsec), mrb_int_value(mrb, stx->stx_ctime.tv_nsec));
-  mrb_iv_set(mrb, self, MRB_IVSYM(mtime_sec), mrb_int_value(mrb, stx->stx_mtime.tv_sec));
-  mrb_iv_set(mrb, self, MRB_IVSYM(mtime_nsec), mrb_int_value(mrb, stx->stx_mtime.tv_nsec));
-  mrb_iv_set(mrb, self, MRB_IVSYM(rdev_major), mrb_int_value(mrb, stx->stx_rdev_major));
-  mrb_iv_set(mrb, self, MRB_IVSYM(rdev_minor), mrb_int_value(mrb, stx->stx_rdev_minor));
-  mrb_iv_set(mrb, self, MRB_IVSYM(dev_major), mrb_int_value(mrb, stx->stx_dev_major));
-  mrb_iv_set(mrb, self, MRB_IVSYM(dev_minor), mrb_int_value(mrb, stx->stx_dev_minor));
+  mrb_iv_set(mrb, statx, MRB_IVSYM(mask), mrb_int_value(mrb, stx->stx_mask));
+  mrb_iv_set(mrb, statx, MRB_IVSYM(blksize), mrb_int_value(mrb, stx->stx_blksize));
+  mrb_iv_set(mrb, statx, MRB_IVSYM(attributes), mrb_int_value(mrb, stx->stx_attributes));
+  mrb_iv_set(mrb, statx, MRB_IVSYM(nlink), mrb_int_value(mrb, stx->stx_nlink));
+  mrb_iv_set(mrb, statx, MRB_IVSYM(uid), mrb_int_value(mrb, stx->stx_uid));
+  mrb_iv_set(mrb, statx, MRB_IVSYM(gid), mrb_int_value(mrb, stx->stx_gid));
+  mrb_iv_set(mrb, statx, MRB_IVSYM(mode), mrb_int_value(mrb, stx->stx_mode));
+  mrb_iv_set(mrb, statx, MRB_IVSYM(ino), mrb_int_value(mrb, stx->stx_ino));
+  mrb_iv_set(mrb, statx, MRB_IVSYM(size), mrb_int_value(mrb, stx->stx_size));
+  mrb_iv_set(mrb, statx, MRB_IVSYM(blocks), mrb_int_value(mrb, stx->stx_blocks));
+  mrb_iv_set(mrb, statx, MRB_IVSYM(attributes_mask), mrb_int_value(mrb, stx->stx_attributes_mask));
+  mrb_iv_set(mrb, statx, MRB_IVSYM(atime_sec), mrb_int_value(mrb, stx->stx_atime.tv_sec));
+  mrb_iv_set(mrb, statx, MRB_IVSYM(atime_nsec), mrb_int_value(mrb, stx->stx_atime.tv_nsec));
+  mrb_iv_set(mrb, statx, MRB_IVSYM(btime_sec), mrb_int_value(mrb, stx->stx_btime.tv_sec));
+  mrb_iv_set(mrb, statx, MRB_IVSYM(btime_nsec), mrb_int_value(mrb, stx->stx_btime.tv_nsec));
+  mrb_iv_set(mrb, statx, MRB_IVSYM(ctime_sec), mrb_int_value(mrb, stx->stx_ctime.tv_sec));
+  mrb_iv_set(mrb, statx, MRB_IVSYM(ctime_nsec), mrb_int_value(mrb, stx->stx_ctime.tv_nsec));
+  mrb_iv_set(mrb, statx, MRB_IVSYM(mtime_sec), mrb_int_value(mrb, stx->stx_mtime.tv_sec));
+  mrb_iv_set(mrb, statx, MRB_IVSYM(mtime_nsec), mrb_int_value(mrb, stx->stx_mtime.tv_nsec));
+  mrb_iv_set(mrb, statx, MRB_IVSYM(rdev_major), mrb_int_value(mrb, stx->stx_rdev_major));
+  mrb_iv_set(mrb, statx, MRB_IVSYM(rdev_minor), mrb_int_value(mrb, stx->stx_rdev_minor));
+  mrb_iv_set(mrb, statx, MRB_IVSYM(dev_major), mrb_int_value(mrb, stx->stx_dev_major));
+  mrb_iv_set(mrb, statx, MRB_IVSYM(dev_minor), mrb_int_value(mrb, stx->stx_dev_minor));
 
 #ifdef STATX_MNT_ID
-  mrb_iv_set(mrb, self, MRB_IVSYM(mnt_id), mrb_int_value(mrb, stx->stx_mnt_id));
+  mrb_iv_set(mrb, statx, MRB_IVSYM(mnt_id), mrb_int_value(mrb, stx->stx_mnt_id));
 #endif
 #ifdef STATX_DIOALIGN
-  mrb_iv_set(mrb, self, MRB_IVSYM(dio_mem_align), mrb_int_value(mrb, stx->stx_dio_mem_align));
-  mrb_iv_set(mrb, self, MRB_IVSYM(dio_offset_align), mrb_int_value(mrb, stx->stx_dio_offset_align));
+  mrb_iv_set(mrb, statx, MRB_IVSYM(dio_mem_align), mrb_int_value(mrb, stx->stx_dio_mem_align));
+  mrb_iv_set(mrb, statx, MRB_IVSYM(dio_offset_align), mrb_int_value(mrb, stx->stx_dio_offset_align));
 #endif
 }
 
 static mrb_value
-mrb_statx_for_statx(mrb_state *mrb, mrb_value self)
+mrb_statx_for_statx(mrb_state *mrb, mrb_value statx)
 {
-  mrb_statx_set_intance_variables(mrb, self, DATA_PTR(self));
-  return mrb_funcall_id(mrb, self, MRB_SYM(convert_timestamps), 0);
+  mrb_statx_set_intance_variables(mrb, statx, DATA_PTR(statx));
+  return mrb_funcall_id(mrb, statx, MRB_SYM(convert_timestamps), 0);
 }
 
 static mrb_value
@@ -1564,56 +1563,56 @@ mrb_mruby_io_uring_gem_init(mrb_state* mrb)
   struct RClass *statx_class = mrb_define_class(mrb, "Statx", mrb->object_class);
   MRB_SET_INSTANCE_TT(statx_class, MRB_TT_CDATA);
 
-  mrb_define_method(mrb, statx_class, "initialize", mrb_statx_initialize, MRB_ARGS_ARG(1, 3));
+  mrb_define_method_id(mrb, statx_class, MRB_SYM(initialize), mrb_statx_initialize, MRB_ARGS_ARG(1, 3));
 
   /* Define constants for Statx */
 #ifdef STATX_TYPE
-  mrb_define_const(mrb, statx_class, "TYPE", mrb_int_value(mrb, STATX_TYPE));
+  mrb_define_const_id(mrb, statx_class, MRB_SYM(TYPE), mrb_int_value(mrb, STATX_TYPE));
 #endif
 #ifdef STATX_MODE
-  mrb_define_const(mrb, statx_class, "MODE", mrb_int_value(mrb, STATX_MODE));
+  mrb_define_const_id(mrb, statx_class, MRB_SYM(MODE), mrb_int_value(mrb, STATX_MODE));
 #endif
 #ifdef STATX_NLINK
-  mrb_define_const(mrb, statx_class, "NLINK", mrb_int_value(mrb, STATX_NLINK));
+  mrb_define_const_id(mrb, statx_class, MRB_SYM(NLINK), mrb_int_value(mrb, STATX_NLINK));
 #endif
 #ifdef STATX_UID
-  mrb_define_const(mrb, statx_class, "UID", mrb_int_value(mrb, STATX_UID));
+  mrb_define_const_id(mrb, statx_class, MRB_SYM(UID), mrb_int_value(mrb, STATX_UID));
 #endif
 #ifdef STATX_GID
-  mrb_define_const(mrb, statx_class, "GID", mrb_int_value(mrb, STATX_GID));
+  mrb_define_const_id(mrb, statx_class, MRB_SYM(GID), mrb_int_value(mrb, STATX_GID));
 #endif
 #ifdef STATX_ATIME
-  mrb_define_const(mrb, statx_class, "ATIME", mrb_int_value(mrb, STATX_ATIME));
+  mrb_define_const_id(mrb, statx_class, MRB_SYM(ATIME), mrb_int_value(mrb, STATX_ATIME));
 #endif
 #ifdef STATX_MTIME
-  mrb_define_const(mrb, statx_class, "MTIME", mrb_int_value(mrb, STATX_MTIME));
+  mrb_define_const_id(mrb, statx_class, MRB_SYM(MTIME), mrb_int_value(mrb, STATX_MTIME));
 #endif
 #ifdef STATX_CTIME
-  mrb_define_const(mrb, statx_class, "CTIME", mrb_int_value(mrb, STATX_CTIME));
+  mrb_define_const_id(mrb, statx_class, MRB_SYM(CTIME), mrb_int_value(mrb, STATX_CTIME));
 #endif
 #ifdef STATX_INO
-  mrb_define_const(mrb, statx_class, "INO", mrb_int_value(mrb, STATX_INO));
+  mrb_define_const_id(mrb, statx_class, MRB_SYM(INO), mrb_int_value(mrb, STATX_INO));
 #endif
 #ifdef STATX_SIZE
-  mrb_define_const(mrb, statx_class, "SIZE", mrb_int_value(mrb, STATX_SIZE));
+  mrb_define_const_id(mrb, statx_class, MRB_SYM(SIZE), mrb_int_value(mrb, STATX_SIZE));
 #endif
 #ifdef STATX_BLOCKS
-  mrb_define_const(mrb, statx_class, "BLOCKS", mrb_int_value(mrb, STATX_BLOCKS));
+  mrb_define_const_id(mrb, statx_class, MRB_SYM(BLOCKS), mrb_int_value(mrb, STATX_BLOCKS));
 #endif
 #ifdef STATX_BASIC_STATS
-  mrb_define_const(mrb, statx_class, "BASIC_STATS", mrb_int_value(mrb, STATX_BASIC_STATS));
+  mrb_define_const_id(mrb, statx_class, MRB_SYM(BASIC_STATS), mrb_int_value(mrb, STATX_BASIC_STATS));
 #endif
 #ifdef STATX_BTIME
-  mrb_define_const(mrb, statx_class, "BTIME", mrb_int_value(mrb, STATX_BTIME));
+  mrb_define_const_id(mrb, statx_class, MRB_SYM(BTIME), mrb_int_value(mrb, STATX_BTIME));
 #endif
 #ifdef STATX_ALL
-  mrb_define_const(mrb, statx_class, "ALL", mrb_int_value(mrb, STATX_ALL));
+  mrb_define_const_id(mrb, statx_class, MRB_SYM(ALL), mrb_int_value(mrb, STATX_ALL));
 #endif
 #ifdef STATX_MNT_ID
-  mrb_define_const(mrb, statx_class, "MNT_ID", mrb_int_value(mrb, STATX_MNT_ID));
+  mrb_define_const_id(mrb, statx_class, MRB_SYM(MNT_ID), mrb_int_value(mrb, STATX_MNT_ID));
 #endif
 #ifdef STATX_DIOALIGN
-  mrb_define_const(mrb, statx_class, "DIOALIGN", mrb_int_value(mrb, STATX_DIOALIGN));
+  mrb_define_const_id(mrb, statx_class, MRB_SYM(DIOALIGN), mrb_int_value(mrb, STATX_DIOALIGN));
 #endif
 
   /* Define other constants in Kernel */
