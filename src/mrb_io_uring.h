@@ -63,7 +63,7 @@ static const struct mrb_data_type mrb_io_uring_queue_type = {
 typedef struct {
   mrb_int index;
   mrb_value buffer;
-} mrb_io_uring_buffer_t;
+} mrb_io_uring_fixed_buffer_t;
 
 enum mrb_io_uring_op {
   MRB_IORING_OP_READ_FIXED,
@@ -90,6 +90,41 @@ typedef struct {
     void *ptr;
     enum mrb_io_uring_op op;
 } PtrAndInt;
+
+static uint64_t
+encode_operation_op(mrb_state *mrb, void *ptr, enum mrb_io_uring_op op)
+{
+  if (likely(can_use_high_bits)) {
+    return ((uint64_t)ptr & 0x0000FFFFFFFFFFFFULL) | ((uint64_t)(op) << (64 - 8));
+  } else {
+    PtrAndInt *pai = mrb_malloc(mrb, sizeof(PtrAndInt));
+    pai->ptr = ptr;
+    pai->op = op;
+    return (uint64_t)pai;
+  }
+}
+
+static void *
+decode_operation(uint64_t packed_value)
+{
+  if (likely(can_use_high_bits)) {
+    return (void *)(packed_value & 0x0000FFFFFFFFFFFFULL);
+  } else {
+    PtrAndInt *pai = (PtrAndInt *)packed_value;
+    return pai->ptr;
+  }
+}
+
+static enum mrb_io_uring_op
+decode_op(uint64_t packed_value)
+{
+  if (likely(can_use_high_bits)) {
+    return (enum mrb_io_uring_op)(packed_value >> (64 - 8));
+  } else {
+    PtrAndInt *pai = (PtrAndInt *)packed_value;
+    return pai->op;
+  }
+}
 
 static void
 mrb_io_uring_operation_gc_free(mrb_state *mrb, void *p)

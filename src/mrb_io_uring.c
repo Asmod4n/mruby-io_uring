@@ -84,13 +84,13 @@ mrb_io_uring_get_fixed_buffer_size(mrb_state *mrb, mrb_value self)
   return mrb_int_value(mrb, mrb_io_uring->fixed_buffer_size);
 }
 
-static mrb_io_uring_buffer_t
-mrb_io_uring_buffer_get(mrb_state *mrb, mrb_io_uring_t *mrb_io_uring)
+static mrb_io_uring_fixed_buffer_t
+mrb_io_uring_fixed_buffer_get(mrb_state *mrb, mrb_io_uring_t *mrb_io_uring)
 {
   if (RARRAY_LEN(mrb_io_uring->free_list) > 0) {
     mrb_value index_val = mrb_ary_pop(mrb, mrb_io_uring->free_list);
     mrb_int index = mrb_as_int(mrb, index_val);
-    mrb_io_uring_buffer_t result = {index, mrb_ary_ref(mrb, mrb_io_uring->buffers, index) };
+    mrb_io_uring_fixed_buffer_t result = {index, mrb_ary_ref(mrb, mrb_io_uring->buffers, index) };
 
     return result;
   }
@@ -102,7 +102,7 @@ mrb_io_uring_buffer_get(mrb_state *mrb, mrb_io_uring_t *mrb_io_uring)
   struct iovec iovec = { RSTRING_PTR(buffer), mrb_io_uring->fixed_buffer_size };
   int ret = io_uring_register_buffers_update_tag(&mrb_io_uring->ring, num_buffers, &iovec, NULL, 1);
   if (likely(ret == 1)) {
-    mrb_io_uring_buffer_t result = { num_buffers,  buffer };
+    mrb_io_uring_fixed_buffer_t result = { num_buffers,  buffer };
     mrb_ary_push(mrb, mrb_io_uring->buffers, buffer);
 
     return result;
@@ -151,41 +151,6 @@ mrb_io_uring_get_sqe(mrb_state *mrb, struct io_uring *ring)
     mrb_raise(mrb, E_IO_URING_SQ_RING_FULL_ERROR, "SQ ring is currently full and entries must be submitted for processing before new ones can get allocated");
   }
   return sqe;
-}
-
-static uint64_t
-encode_operation_op(mrb_state *mrb, void *ptr, enum mrb_io_uring_op op)
-{
-  if (likely(can_use_high_bits)) {
-    return ((uint64_t)ptr & 0x0000FFFFFFFFFFFFULL) | ((uint64_t)(op) << (64 - 8));
-  } else {
-    PtrAndInt *pai = mrb_malloc(mrb, sizeof(PtrAndInt));
-    pai->ptr = ptr;
-    pai->op = op;
-    return (uint64_t)pai;
-  }
-}
-
-static void *
-decode_operation(uint64_t packed_value)
-{
-  if (likely(can_use_high_bits)) {
-    return (void *)(packed_value & 0x0000FFFFFFFFFFFFULL);
-  } else {
-    PtrAndInt *pai = (PtrAndInt *)packed_value;
-    return pai->ptr;
-  }
-}
-
-static enum mrb_io_uring_op
-decode_op(uint64_t packed_value)
-{
-  if (likely(can_use_high_bits)) {
-    return (enum mrb_io_uring_op)(packed_value >> (64 - 8));
-  } else {
-    PtrAndInt *pai = (PtrAndInt *)packed_value;
-    return pai->op;
-  }
 }
 
 static mrb_value
@@ -284,7 +249,7 @@ mrb_io_uring_prep_connect(mrb_state *mrb, mrb_value self)
     mrb_symbol_value(MRB_IVSYM(ring)),     self,
     mrb_symbol_value(MRB_IVSYM(type)),     mrb_symbol_value(MRB_SYM(connect)),
     mrb_symbol_value(MRB_IVSYM(sock)),     sock,
-    mrb_symbol_value(MRB_IVSYM(addrinfo)), addrinfo
+    mrb_symbol_value(MRB_SYM(addrinfo)), addrinfo
   };
   mrb_value operation = mrb_obj_new(mrb, mrb_io_uring->operation_class, NELEMS(argv), argv);
   uint64_t encoded_operation = encode_operation_op(mrb, mrb_ptr(operation), MRB_IORING_OP_CONNECT);
@@ -323,7 +288,7 @@ mrb_io_uring_prep_recv(mrb_state *mrb, mrb_value self)
     mrb_symbol_value(MRB_IVSYM(ring)), self,
     mrb_symbol_value(MRB_IVSYM(type)), mrb_symbol_value(MRB_SYM(recv)),
     mrb_symbol_value(MRB_IVSYM(sock)), sock,
-    mrb_symbol_value(MRB_IVSYM(buf)),  buf
+    mrb_symbol_value(MRB_SYM(buf)),  buf
   };
   mrb_value operation = mrb_obj_new(mrb, mrb_io_uring->operation_class, NELEMS(argv), argv);
   uint64_t encoded_operation = encode_operation_op(mrb, mrb_ptr(operation), MRB_IORING_OP_RECV);
@@ -382,7 +347,7 @@ mrb_io_uring_prep_send(mrb_state *mrb, mrb_value self)
     mrb_symbol_value(MRB_IVSYM(ring)), self,
     mrb_symbol_value(MRB_IVSYM(type)), mrb_symbol_value(MRB_SYM(send)),
     mrb_symbol_value(MRB_IVSYM(sock)), sock,
-    mrb_symbol_value(MRB_IVSYM(buf)),  buf,
+    mrb_symbol_value(MRB_SYM(buf)),  buf,
     mrb_symbol_value(MRB_SYM(buf_was_frozen)), mrb_bool_value(mrb_frozen_p((mrb_basic_ptr(buf))))
   };
   mrb_obj_freeze(mrb, buf);
@@ -565,9 +530,9 @@ mrb_io_uring_prep_openat2(mrb_state *mrb, mrb_value self)
   mrb_value argv[] = {
     mrb_symbol_value(MRB_IVSYM(ring)),       self,
     mrb_symbol_value(MRB_IVSYM(type)),       mrb_symbol_value(MRB_SYM(openat2)),
-    mrb_symbol_value(MRB_IVSYM(path)),       path,
+    mrb_symbol_value(MRB_SYM(path)),       path,
     mrb_symbol_value(MRB_IVSYM(directory)),  directory,
-    mrb_symbol_value(MRB_IVSYM(open_how)),   open_how,
+    mrb_symbol_value(MRB_SYM(open_how)),   open_how,
     mrb_symbol_value(MRB_SYM(path_was_frozen)),   mrb_bool_value(mrb_frozen_p((mrb_basic_ptr(path))))
   };
   mrb_value operation = mrb_obj_new(mrb, mrb_io_uring->operation_class, NELEMS(argv), argv);
@@ -609,7 +574,7 @@ mrb_io_uring_prep_read(mrb_state *mrb, mrb_value self)
     mrb_symbol_value(MRB_IVSYM(ring)), self,
     mrb_symbol_value(MRB_IVSYM(type)), mrb_symbol_value(MRB_SYM(read)),
     mrb_symbol_value(MRB_IVSYM(file)), file,
-    mrb_symbol_value(MRB_IVSYM(buf)),  buf
+    mrb_symbol_value(MRB_SYM(buf)),  buf
   };
   mrb_value operation = mrb_obj_new(mrb, mrb_io_uring->operation_class, NELEMS(argv), argv);
   uint64_t encoded_operation = encode_operation_op(mrb, mrb_ptr(operation), MRB_IORING_OP_READ);
@@ -637,13 +602,13 @@ mrb_io_uring_prep_read_fixed(mrb_state *mrb, mrb_value self)
 
   mrb_io_uring_t *mrb_io_uring = DATA_PTR(self);
 
-  mrb_io_uring_buffer_t buffer_t = mrb_io_uring_buffer_get(mrb, mrb_io_uring);
+  mrb_io_uring_fixed_buffer_t buffer_t = mrb_io_uring_fixed_buffer_get(mrb, mrb_io_uring);
 
   mrb_value argv[] = {
     mrb_symbol_value(MRB_IVSYM(ring)),     self,
     mrb_symbol_value(MRB_IVSYM(type)),     mrb_symbol_value(MRB_SYM(read_fixed)),
     mrb_symbol_value(MRB_IVSYM(file)),     file,
-    mrb_symbol_value(MRB_IVSYM(buf)),      buffer_t.buffer,
+    mrb_symbol_value(MRB_SYM(buf)),      buffer_t.buffer,
     mrb_symbol_value(MRB_SYM(buf_index)), mrb_int_value(mrb, buffer_t.index)
   };
   mrb_value operation = mrb_obj_new(mrb, mrb_io_uring->operation_class, NELEMS(argv), argv);
@@ -673,7 +638,7 @@ mrb_io_uring_prep_write(mrb_state *mrb, mrb_value self)
     mrb_symbol_value(MRB_IVSYM(ring)), self,
     mrb_symbol_value(MRB_IVSYM(type)), mrb_symbol_value(MRB_SYM(write)),
     mrb_symbol_value(MRB_IVSYM(file)), file,
-    mrb_symbol_value(MRB_IVSYM(buf)),  buf,
+    mrb_symbol_value(MRB_SYM(buf)),  buf,
     mrb_symbol_value(MRB_SYM(buf_was_frozen)), mrb_bool_value(mrb_frozen_p((mrb_basic_ptr(buf))))
   };
   mrb_obj_freeze(mrb, buf);
@@ -780,12 +745,12 @@ mrb_io_uring_prep_statx(mrb_state *mrb, mrb_value self)
 
   mrb_io_uring_t *mrb_io_uring = DATA_PTR(self);
   mrb_value argv[] = {
-    mrb_symbol_value(MRB_IVSYM(ring)),        self,
-    mrb_symbol_value(MRB_IVSYM(type)),        mrb_symbol_value(MRB_SYM(statx)),
-    mrb_symbol_value(MRB_IVSYM(path)),        path,
-    mrb_symbol_value(MRB_IVSYM(directory)),   directory,
+    mrb_symbol_value(MRB_IVSYM(ring)),          self,
+    mrb_symbol_value(MRB_IVSYM(type)),          mrb_symbol_value(MRB_SYM(statx)),
+    mrb_symbol_value(MRB_SYM(path)),            path,
+    mrb_symbol_value(MRB_IVSYM(directory)),     directory,
     mrb_symbol_value(MRB_SYM(path_was_frozen)), path_was_frozen,
-    mrb_symbol_value(MRB_IVSYM(statx)),      statx
+    mrb_symbol_value(MRB_SYM(statx)),         statx
   };
   mrb_value operation = mrb_obj_new(mrb, mrb_io_uring->operation_class, NELEMS(argv), argv);
   uint64_t encoded_operation = encode_operation_op(mrb, mrb_ptr(operation), MRB_IORING_OP_STATX);
@@ -801,47 +766,181 @@ mrb_io_uring_prep_statx(mrb_state *mrb, mrb_value self)
   return operation;
 }
 
+static mrb_int
+mask_device(mrb_int major, mrb_int minor)
+{
+  return (major << 8) | minor;
+}
+
 static void
-mrb_statx_set_intance_variables(mrb_state *mrb, mrb_value statx, struct statx *stx)
+mrb_statx_set_instance_variables(mrb_state *mrb, mrb_value statx, struct statx *stx)
 {
   mrb_iv_set(mrb, statx, MRB_IVSYM(mask), mrb_int_value(mrb, stx->stx_mask));
   mrb_iv_set(mrb, statx, MRB_IVSYM(blksize), mrb_int_value(mrb, stx->stx_blksize));
   mrb_iv_set(mrb, statx, MRB_IVSYM(attributes), mrb_int_value(mrb, stx->stx_attributes));
-  mrb_iv_set(mrb, statx, MRB_IVSYM(nlink), mrb_int_value(mrb, stx->stx_nlink));
-  mrb_iv_set(mrb, statx, MRB_IVSYM(uid), mrb_int_value(mrb, stx->stx_uid));
-  mrb_iv_set(mrb, statx, MRB_IVSYM(gid), mrb_int_value(mrb, stx->stx_gid));
-  mrb_iv_set(mrb, statx, MRB_IVSYM(mode), mrb_int_value(mrb, stx->stx_mode));
-  mrb_iv_set(mrb, statx, MRB_IVSYM(ino), mrb_int_value(mrb, stx->stx_ino));
-  mrb_iv_set(mrb, statx, MRB_IVSYM(size), mrb_int_value(mrb, stx->stx_size));
-  mrb_iv_set(mrb, statx, MRB_IVSYM(blocks), mrb_int_value(mrb, stx->stx_blocks));
-  mrb_iv_set(mrb, statx, MRB_IVSYM(attributes_mask), mrb_int_value(mrb, stx->stx_attributes_mask));
-  mrb_iv_set(mrb, statx, MRB_IVSYM(atime_sec), mrb_int_value(mrb, stx->stx_atime.tv_sec));
-  mrb_iv_set(mrb, statx, MRB_IVSYM(atime_nsec), mrb_int_value(mrb, stx->stx_atime.tv_nsec));
-  mrb_iv_set(mrb, statx, MRB_IVSYM(btime_sec), mrb_int_value(mrb, stx->stx_btime.tv_sec));
-  mrb_iv_set(mrb, statx, MRB_IVSYM(btime_nsec), mrb_int_value(mrb, stx->stx_btime.tv_nsec));
-  mrb_iv_set(mrb, statx, MRB_IVSYM(ctime_sec), mrb_int_value(mrb, stx->stx_ctime.tv_sec));
-  mrb_iv_set(mrb, statx, MRB_IVSYM(ctime_nsec), mrb_int_value(mrb, stx->stx_ctime.tv_nsec));
-  mrb_iv_set(mrb, statx, MRB_IVSYM(mtime_sec), mrb_int_value(mrb, stx->stx_mtime.tv_sec));
-  mrb_iv_set(mrb, statx, MRB_IVSYM(mtime_nsec), mrb_int_value(mrb, stx->stx_mtime.tv_nsec));
-  mrb_iv_set(mrb, statx, MRB_IVSYM(rdev_major), mrb_int_value(mrb, stx->stx_rdev_major));
-  mrb_iv_set(mrb, statx, MRB_IVSYM(rdev_minor), mrb_int_value(mrb, stx->stx_rdev_minor));
+
+#ifdef STATX_NLINK
+  if (stx->stx_mask & STATX_NLINK) {
+    mrb_iv_set(mrb, statx, MRB_IVSYM(nlink), mrb_int_value(mrb, stx->stx_nlink));
+  }
+#endif
+#ifdef STATX_UID
+  if (stx->stx_mask & STATX_UID) {
+    mrb_iv_set(mrb, statx, MRB_IVSYM(uid), mrb_int_value(mrb, stx->stx_uid));
+  }
+#endif
+#ifdef STATX_GID
+  if (stx->stx_mask & STATX_GID) {
+    mrb_iv_set(mrb, statx, MRB_IVSYM(gid), mrb_int_value(mrb, stx->stx_gid));
+  }
+#endif
+#ifdef STATX_MODE
+  if (stx->stx_mask & STATX_MODE) {
+    mrb_iv_set(mrb, statx, MRB_IVSYM(mode), mrb_int_value(mrb, stx->stx_mode));
+  }
+#endif
+#ifdef STATX_INO
+  if (stx->stx_mask & STATX_INO) {
+    mrb_iv_set(mrb, statx, MRB_IVSYM(ino), mrb_int_value(mrb, stx->stx_ino));
+  }
+#endif
+#ifdef STATX_SIZE
+  if (stx->stx_mask & STATX_SIZE) {
+    mrb_iv_set(mrb, statx, MRB_IVSYM(size), mrb_int_value(mrb, stx->stx_size));
+  }
+#endif
+#ifdef STATX_BLOCKS
+  if (stx->stx_mask & STATX_BLOCKS) {
+    mrb_iv_set(mrb, statx, MRB_IVSYM(blocks), mrb_int_value(mrb, stx->stx_blocks));
+  }
+#endif
+  if (stx->stx_attributes_mask) {
+    mrb_iv_set(mrb, statx, MRB_IVSYM(attributes_mask), mrb_int_value(mrb, stx->stx_attributes_mask));
+  }
+
+#ifdef STATX_ATTR_COMPRESSED
+  if (stx->stx_attributes_mask & STATX_ATTR_COMPRESSED) {
+    if (stx->stx_attributes & STATX_ATTR_COMPRESSED) {
+      mrb_iv_set(mrb, statx, MRB_IVSYM(attr_compressed), mrb_true_value());
+    }
+  }
+#endif
+#ifdef STATX_ATTR_IMMUTABLE
+  if (stx->stx_attributes_mask & STATX_ATTR_IMMUTABLE) {
+    if (stx->stx_attributes & STATX_ATTR_IMMUTABLE) {
+      mrb_iv_set(mrb, statx, MRB_IVSYM(attr_immutable), mrb_true_value());
+    }
+  }
+#endif
+#ifdef STATX_ATTR_APPEND
+  if (stx->stx_attributes_mask & STATX_ATTR_APPEND) {
+    if (stx->stx_attributes & STATX_ATTR_APPEND) {
+      mrb_iv_set(mrb, statx, MRB_IVSYM(attr_append), mrb_true_value());
+    }
+  }
+#endif
+#ifdef STATX_ATTR_NODUMP
+  if (stx->stx_attributes_mask & STATX_ATTR_NODUMP) {
+    if (stx->stx_attributes & STATX_ATTR_NODUMP) {
+      mrb_iv_set(mrb, statx, MRB_IVSYM(attr_nodump), mrb_true_value());
+    }
+  }
+#endif
+#ifdef STATX_ATTR_ENCRYPTED
+  if (stx->stx_attributes_mask & STATX_ATTR_ENCRYPTED) {
+    if (stx->stx_attributes & STATX_ATTR_ENCRYPTED) {
+      mrb_iv_set(mrb, statx, MRB_IVSYM(attr_encrypted), mrb_true_value());
+    }
+  }
+#endif
+#ifdef STATX_ATTR_AUTOMOUNT
+  if (stx->stx_attributes_mask & STATX_ATTR_AUTOMOUNT) {
+    if (stx->stx_attributes & STATX_ATTR_AUTOMOUNT) {
+      mrb_iv_set(mrb, statx, MRB_IVSYM(attr_automount), mrb_true_value());
+    }
+  }
+#endif
+#ifdef STATX_ATTR_MOUNT_ROOT
+  if (stx->stx_attributes_mask & STATX_ATTR_MOUNT_ROOT) {
+    if (stx->stx_attributes & STATX_ATTR_MOUNT_ROOT) {
+      mrb_iv_set(mrb, statx, MRB_IVSYM(attr_mount_root), mrb_true_value());
+    }
+  }
+#endif
+#ifdef STATX_ATTR_VERITY
+  if (stx->stx_attributes_mask & STATX_ATTR_VERITY) {
+    if (stx->stx_attributes & STATX_ATTR_VERITY) {
+      mrb_iv_set(mrb, statx, MRB_IVSYM(attr_verity), mrb_true_value());
+    }
+  }
+#endif
+#ifdef STATX_ATTR_DAX
+  if (stx->stx_attributes_mask & STATX_ATTR_DAX) {
+    if (stx->stx_attributes & STATX_ATTR_DAX) {
+      mrb_iv_set(mrb, statx, MRB_IVSYM(attr_dax), mrb_true_value());
+    }
+  }
+#endif
+
+  mrb_value time_class = mrb_obj_value(mrb_class_get_id(mrb, MRB_SYM(Time)));
+#ifdef STATX_ATIME
+  if (stx->stx_mask & STATX_ATIME) {
+    mrb_value atime = mrb_funcall_id(mrb, time_class, MRB_SYM(at), 2, mrb_int_value(mrb, stx->stx_atime.tv_sec), mrb_int_value(mrb, stx->stx_atime.tv_nsec / 1000));
+    mrb_iv_set(mrb, statx, MRB_IVSYM(atime), atime);
+  }
+#endif
+#ifdef STATX_BTIME
+  if (stx->stx_mask & STATX_BTIME) {
+    mrb_value btime = mrb_funcall_id(mrb, time_class, MRB_SYM(at), 2, mrb_int_value(mrb, stx->stx_btime.tv_sec), mrb_int_value(mrb, stx->stx_btime.tv_nsec / 1000));
+    mrb_iv_set(mrb, statx, MRB_IVSYM(btime), btime);
+  }
+#endif
+#ifdef STATX_CTIME
+  if (stx->stx_mask & STATX_CTIME) {
+    mrb_value ctime = mrb_funcall_id(mrb, time_class, MRB_SYM(at), 2, mrb_int_value(mrb, stx->stx_ctime.tv_sec), mrb_int_value(mrb, stx->stx_ctime.tv_nsec / 1000));
+    mrb_iv_set(mrb, statx, MRB_IVSYM(ctime), ctime);
+  }
+#endif
+#ifdef STATX_MTIME
+  if (stx->stx_mask & STATX_MTIME) {
+    mrb_value mtime = mrb_funcall_id(mrb, time_class, MRB_SYM(at), 2, mrb_int_value(mrb, stx->stx_mtime.tv_sec), mrb_int_value(mrb, stx->stx_mtime.tv_nsec / 1000));
+    mrb_iv_set(mrb, statx, MRB_IVSYM(mtime), mtime);
+  }
+#endif
+
+  // Conditionally set device fields
+  if (stx->stx_rdev_major || stx->stx_rdev_minor) {
+    mrb_iv_set(mrb, statx, MRB_IVSYM(rdev), mrb_int_value(mrb, mask_device(stx->stx_rdev_major, stx->stx_rdev_minor)));
+    mrb_iv_set(mrb, statx, MRB_IVSYM(rdev_major), mrb_int_value(mrb, stx->stx_rdev_major));
+    mrb_iv_set(mrb, statx, MRB_IVSYM(rdev_minor), mrb_int_value(mrb, stx->stx_rdev_minor));
+  }
+
   mrb_iv_set(mrb, statx, MRB_IVSYM(dev_major), mrb_int_value(mrb, stx->stx_dev_major));
   mrb_iv_set(mrb, statx, MRB_IVSYM(dev_minor), mrb_int_value(mrb, stx->stx_dev_minor));
 
 #ifdef STATX_MNT_ID
-  mrb_iv_set(mrb, statx, MRB_IVSYM(mnt_id), mrb_int_value(mrb, stx->stx_mnt_id));
+  if (stx->stx_mask & STATX_MNT_ID) {
+    mrb_iv_set(mrb, statx, MRB_IVSYM(mnt_id), mrb_int_value(mrb, stx->stx_mnt_id));
+  }
 #endif
 #ifdef STATX_DIOALIGN
-  mrb_iv_set(mrb, statx, MRB_IVSYM(dio_mem_align), mrb_int_value(mrb, stx->stx_dio_mem_align));
-  mrb_iv_set(mrb, statx, MRB_IVSYM(dio_offset_align), mrb_int_value(mrb, stx->stx_dio_offset_align));
+  if (stx->stx_mask & STATX_DIOALIGN) {
+    mrb_iv_set(mrb, statx, MRB_IVSYM(dio_mem_align), mrb_int_value(mrb, stx->stx_dio_mem_align));
+    mrb_iv_set(mrb, statx, MRB_IVSYM(dio_offset_align), mrb_int_value(mrb, stx->stx_dio_offset_align));
+  }
 #endif
-}
-
-static mrb_value
-mrb_statx_for_statx(mrb_state *mrb, mrb_value statx)
-{
-  mrb_statx_set_intance_variables(mrb, statx, DATA_PTR(statx));
-  return mrb_funcall_id(mrb, statx, MRB_SYM(convert_timestamps), 0);
+#ifdef STATX_SUBVOL
+  if (stx->stx_mask & STATX_SUBVOL) {
+    mrb_iv_set(mrb, statx, MRB_IVSYM(subvol), mrb_int_value(mrb, stx->stx_subvol));
+  }
+#endif
+#ifdef STATX_WRITE_ATOMIC
+  if (stx->stx_mask & STATX_WRITE_ATOMIC) {
+    mrb_iv_set(mrb, statx, MRB_IVSYM(atomic_write_unit_min), mrb_int_value(mrb, stx->stx_atomic_write_unit_min));
+    mrb_iv_set(mrb, statx, MRB_IVSYM(atomic_write_unit_max), mrb_int_value(mrb, stx->stx_atomic_write_unit_max));
+    mrb_iv_set(mrb, statx, MRB_IVSYM(atomic_write_segments_max), mrb_int_value(mrb, stx->stx_atomic_write_segments_max));
+  }
+#endif
 }
 
 static mrb_value
@@ -855,15 +954,15 @@ mrb_statx_initialize(mrb_state *mrb, mrb_value self)
   mrb_get_args(mrb, "z|oii", &path, &dirfd, &flags, &mask);
   int dfd = AT_FDCWD;
   if(!mrb_nil_p(dirfd)) {
-    dfd = mrb_integer(mrb_type_convert(mrb, dirfd, MRB_TT_INTEGER, MRB_SYM(fileno)));
+    dfd = (int) mrb_integer(mrb_type_convert(mrb, dirfd, MRB_TT_INTEGER, MRB_SYM(fileno)));
   }
 
   if (syscall(SYS_statx, dfd, path, flags, mask, &stx) < 0) {
     mrb_sys_fail(mrb, "statx");
   }
 
-  mrb_statx_set_intance_variables(mrb, self, &stx);
-  return mrb_funcall_id(mrb, self, MRB_SYM(convert_timestamps), 0);
+  mrb_statx_set_instance_variables(mrb, self, &stx);
+  return self;
 }
 
 static mrb_value
@@ -884,7 +983,7 @@ mrb_io_uring_process_cqe(mrb_state *mrb, mrb_io_uring_t *mrb_io_uring, struct io
         if (likely(mrb_string_p(buf))) {
           struct RString *buf_str = mrb_str_ptr(buf);
           RSTR_UNSET_SINGLE_BYTE_FLAG(buf_str);
-          mrb_assert(RSTRING_CAPA(buf) <= cqe->res);
+          mrb_assert(cqe->res <= (RSTRING_CAPA(buf) + 1));
           RSTR_SET_LEN(buf_str, cqe->res);
         } else {
           mrb_raise(mrb, E_TYPE_ERROR, "buf not found");
@@ -900,7 +999,7 @@ mrb_io_uring_process_cqe(mrb_state *mrb, mrb_io_uring_t *mrb_io_uring, struct io
         if (unlikely(mrb_integer_p(index_val))) {
           mrb_raise(mrb, E_FROZEN_ERROR, "can't modify frozen Buffer");
         }
-        mrb_value buf = mrb_iv_get(mrb, operation, MRB_IVSYM(buf));
+        mrb_value buf = mrb_iv_get(mrb, operation, MRB_SYM(buf));
         if (likely(mrb_string_p(buf))) {
           MRB_UNSET_FROZEN_FLAG(mrb_basic_ptr((buf)));
           mrb_str_resize(mrb, buf, cqe->res);
@@ -910,7 +1009,7 @@ mrb_io_uring_process_cqe(mrb_state *mrb, mrb_io_uring_t *mrb_io_uring, struct io
       } break;
       case MRB_IORING_OP_WRITE:
       case MRB_IORING_OP_SEND: {
-        mrb_value buf = mrb_iv_get(mrb, operation, MRB_IVSYM(buf));
+        mrb_value buf = mrb_iv_get(mrb, operation, MRB_SYM(buf));
         if (likely(mrb_string_p(buf))) {
           mrb_value buf_was_frozen = mrb_iv_get(mrb, operation, MRB_SYM(buf_was_frozen));
           if (!mrb_bool(buf_was_frozen)) {
@@ -920,7 +1019,7 @@ mrb_io_uring_process_cqe(mrb_state *mrb, mrb_io_uring_t *mrb_io_uring, struct io
       } break;
       case MRB_IORING_OP_OPENAT2: {
         mrb_iv_set(mrb, operation, MRB_IVSYM(file), res);
-        mrb_value path = mrb_iv_get(mrb, operation, MRB_IVSYM(path));
+        mrb_value path = mrb_iv_get(mrb, operation, MRB_SYM(path));
         if (mrb_string_p(path)) {
           mrb_value path_was_frozen = mrb_iv_get(mrb, operation, MRB_SYM(path_was_frozen));
           if (!mrb_bool(path_was_frozen)) {
@@ -929,15 +1028,15 @@ mrb_io_uring_process_cqe(mrb_state *mrb, mrb_io_uring_t *mrb_io_uring, struct io
         }
       } break;
       case MRB_IORING_OP_STATX: {
-        mrb_value statx = mrb_iv_get(mrb, operation, MRB_IVSYM(statx));
-        mrb_value path = mrb_iv_get(mrb, operation, MRB_IVSYM(path));
+        mrb_value statx = mrb_iv_get(mrb, operation, MRB_SYM(statx));
+        mrb_value path = mrb_iv_get(mrb, operation, MRB_SYM(path));
         if (mrb_string_p(path)) {
           mrb_value path_was_frozen = mrb_iv_get(mrb, operation, MRB_SYM(path_was_frozen));
           if (!mrb_bool(path_was_frozen)) {
             MRB_UNSET_FROZEN_FLAG(mrb_basic_ptr((path)));
           }
         }
-        mrb_statx_for_statx(mrb, statx);
+        mrb_statx_set_instance_variables(mrb, statx, DATA_PTR(statx));
       } break;
       default:
       break;
@@ -1228,14 +1327,14 @@ mrb_io_uring_parse_resolve_string(mrb_state *mrb, mrb_value resolve)
 static mrb_value
 mrb_io_uring_open_how_init(mrb_state *mrb, mrb_value self)
 {
-  mrb_value flags = mrb_nil_value(), resolve = mrb_nil_value();
+  mrb_value flags_val = mrb_nil_value(), resolve = mrb_nil_value();
   mrb_int mode = -1;
-  mrb_get_args(mrb, "|S!iS!", &flags, &mode, &resolve);
+  mrb_get_args(mrb, "|S!iS!", &flags_val, &mode, &resolve);
 
   struct open_how *how = mrb_realloc(mrb, DATA_PTR(self), sizeof(*how));
   mrb_data_init(self, how, &mrb_io_uring_open_how_type);
 
-  how->flags = mrb_io_uring_parse_flags_string(mrb, flags);
+  how->flags = mrb_io_uring_parse_flags_string(mrb, flags_val);
   if (mode == -1) {
     how->mode = (how->flags & (O_CREAT | O_TMPFILE)) ? 0666 : 0;
   } else {
@@ -1243,7 +1342,7 @@ mrb_io_uring_open_how_init(mrb_state *mrb, mrb_value self)
   }
   how->resolve = mrb_io_uring_parse_resolve_string(mrb, resolve);
 
-  mrb_iv_set(mrb, self, MRB_IVSYM(flags),    flags);
+  mrb_iv_set(mrb, self, MRB_IVSYM(flags),    flags_val);
   mrb_iv_set(mrb, self, MRB_IVSYM(mode),     mrb_int_value(mrb, mode));
   mrb_iv_set(mrb, self, MRB_IVSYM(resolve),  resolve);
 
@@ -1360,6 +1459,36 @@ mrb_uring_writable(mrb_state *mrb, mrb_value self)
   if (likely(mrb_integer_p(res)))
     return mrb_bool_value(mrb_integer(res) & POLLOUT);
   return mrb_nil_value();
+}
+
+static mrb_value
+mrb_io_uring_get_addrinfo(mrb_state *mrb, mrb_value self)
+{
+  return mrb_iv_get(mrb, self, MRB_SYM(addrinfo));
+}
+
+static mrb_value
+mrb_io_uring_get_buf(mrb_state *mrb, mrb_value self)
+{
+  return mrb_iv_get(mrb, self, MRB_SYM(buf));
+}
+
+static mrb_value
+mrb_io_uring_get_path(mrb_state *mrb, mrb_value self)
+{
+  return mrb_iv_get(mrb, self, MRB_SYM(path));
+}
+
+static mrb_value
+mrb_io_uring_get_open_how(mrb_state *mrb, mrb_value self)
+{
+  return mrb_iv_get(mrb, self, MRB_SYM(open_how));
+}
+
+static mrb_value
+mrb_io_uring_get_statx(mrb_state *mrb, mrb_value self)
+{
+  return mrb_iv_get(mrb, self, MRB_SYM(statx));
 }
 
 static void
@@ -1554,13 +1683,13 @@ mrb_mruby_io_uring_gem_init(mrb_state* mrb)
   mrb_define_const_id (mrb, mrb->kernel_module, MRB_SYM(AT_FDCWD), mrb_fixnum_value(AT_FDCWD));
 
   io_uring_error_class = mrb_define_class_under_id(mrb, io_uring_class, MRB_SYM(Error), mrb->eStandardError_class);
-  mrb_define_class_under(mrb, io_uring_class, "SQRingFullError",  io_uring_error_class);
+  mrb_define_class_under_id(mrb, io_uring_class, MRB_SYM(SQRingFullError),  io_uring_error_class);
 
   io_uring_open_how_class = mrb_define_class_id(mrb, MRB_SYM(OpenHow), mrb->object_class);
   MRB_SET_INSTANCE_TT(io_uring_open_how_class, MRB_TT_CDATA);
   mrb_define_method_id(mrb, io_uring_open_how_class, MRB_SYM(initialize), mrb_io_uring_open_how_init, MRB_ARGS_OPT(3));
 
-  struct RClass *statx_class = mrb_define_class(mrb, "Statx", mrb->object_class);
+  struct RClass *statx_class = mrb_define_class_id(mrb, MRB_SYM(Statx), mrb->object_class);
   MRB_SET_INSTANCE_TT(statx_class, MRB_TT_CDATA);
 
   mrb_define_method_id(mrb, statx_class, MRB_SYM(initialize), mrb_statx_initialize, MRB_ARGS_ARG(1, 3));
@@ -1614,38 +1743,49 @@ mrb_mruby_io_uring_gem_init(mrb_state* mrb)
 #ifdef STATX_DIOALIGN
   mrb_define_const_id(mrb, statx_class, MRB_SYM(DIOALIGN), mrb_int_value(mrb, STATX_DIOALIGN));
 #endif
+#ifdef STATX_WRITE_ATOMIC
+  mrb_define_const_id(mrb, statx_class, MRB_SYM(WRITE_ATOMIC), mrb_int_value(mrb, STATX_WRITE_ATOMIC));
+#endif
+#ifdef STATX_SUBVOL
+  mrb_define_const_id(mrb, statx_class, MRB_SYM(SUBVOL), mrb_int_value(mrb, STATX_SUBVOL));
+#endif
 
   /* Define other constants in Kernel */
 #ifdef AT_EMPTY_PATH
-  mrb_define_const(mrb, mrb->kernel_module, "AT_EMPTY_PATH", mrb_int_value(mrb, AT_EMPTY_PATH));
+  mrb_define_const_id(mrb, mrb->kernel_module, MRB_SYM(AT_EMPTY_PATH), mrb_int_value(mrb, AT_EMPTY_PATH));
 #endif
 #ifdef AT_NO_AUTOMOUNT
-  mrb_define_const(mrb, mrb->kernel_module, "AT_NO_AUTOMOUNT", mrb_int_value(mrb, AT_NO_AUTOMOUNT));
+  mrb_define_const_id(mrb, mrb->kernel_module, MRB_SYM(AT_NO_AUTOMOUNT), mrb_int_value(mrb, AT_NO_AUTOMOUNT));
 #endif
 #ifdef AT_SYMLINK_NOFOLLOW
-  mrb_define_const(mrb, mrb->kernel_module, "AT_SYMLINK_NOFOLLOW", mrb_int_value(mrb, AT_SYMLINK_NOFOLLOW));
+  mrb_define_const_id(mrb, mrb->kernel_module, MRB_SYM(AT_SYMLINK_NOFOLLOW), mrb_int_value(mrb, AT_SYMLINK_NOFOLLOW));
 #endif
 #ifdef AT_STATX_SYNC_AS_STAT
-  mrb_define_const(mrb, mrb->kernel_module, "AT_STATX_SYNC_AS_STAT", mrb_int_value(mrb, AT_STATX_SYNC_AS_STAT));
+  mrb_define_const_id(mrb, mrb->kernel_module, MRB_SYM(AT_STATX_SYNC_AS_STAT), mrb_int_value(mrb, AT_STATX_SYNC_AS_STAT));
 #endif
 #ifdef AT_STATX_FORCE_SYNC
-  mrb_define_const(mrb, mrb->kernel_module, "AT_STATX_FORCE_SYNC", mrb_int_value(mrb, AT_STATX_FORCE_SYNC));
+  mrb_define_const_id(mrb, mrb->kernel_module, MRB_SYM(AT_STATX_FORCE_SYNC), mrb_int_value(mrb, AT_STATX_FORCE_SYNC));
 #endif
 #ifdef AT_STATX_DONT_SYNC
-  mrb_define_const(mrb, mrb->kernel_module, "AT_STATX_DONT_SYNC", mrb_int_value(mrb, AT_STATX_DONT_SYNC));
+  mrb_define_const_id(mrb, mrb->kernel_module, MRB_SYM(AT_STATX_DONT_SYNC), mrb_int_value(mrb, AT_STATX_DONT_SYNC));
 #endif
 
   io_uring_op_class = mrb_define_class_under_id(mrb, io_uring_class, MRB_SYM(Operation), mrb->object_class);
   MRB_SET_INSTANCE_TT(io_uring_op_class, MRB_TT_CDATA);
-  mrb_define_method_id(mrb, io_uring_op_class, MRB_SYM(initialize),           mrb_io_uring_operation_class_init, MRB_ARGS_ANY());
+  mrb_define_method_id(mrb, io_uring_op_class, MRB_SYM(initialize),             mrb_io_uring_operation_class_init, MRB_ARGS_ANY());
   mrb_define_const_id (mrb, io_uring_op_class, MRB_SYM(CQE_F_BUFFER),         mrb_fixnum_value(IORING_CQE_F_BUFFER));
   mrb_define_const_id (mrb, io_uring_op_class, MRB_SYM(CQE_F_MORE),           mrb_fixnum_value(IORING_CQE_F_MORE));
   mrb_define_const_id (mrb, io_uring_op_class, MRB_SYM(CQE_F_SOCK_NONEMPTY),  mrb_fixnum_value(IORING_CQE_F_SOCK_NONEMPTY));
   mrb_define_const_id (mrb, io_uring_op_class, MRB_SYM(CQE_F_NOTIF),          mrb_fixnum_value(IORING_CQE_F_NOTIF));
   mrb_define_const_id (mrb, io_uring_op_class, MRB_SYM(SQE_IO_LINK),          mrb_fixnum_value(IOSQE_IO_LINK));
-  mrb_define_method_id(mrb, io_uring_op_class, MRB_SYM(to_io),                mrb_io_uring_operation_to_io,  MRB_ARGS_NONE());
-  mrb_define_method_id(mrb, io_uring_op_class, MRB_SYM_Q(readable),            mrb_uring_readable, MRB_ARGS_NONE());
-  mrb_define_method_id(mrb, io_uring_op_class, MRB_SYM_Q(writable),            mrb_uring_writable, MRB_ARGS_NONE());
+  mrb_define_method_id(mrb, io_uring_op_class, MRB_SYM(to_io),                  mrb_io_uring_operation_to_io,  MRB_ARGS_NONE());
+  mrb_define_method_id(mrb, io_uring_op_class, MRB_SYM_Q(readable),             mrb_uring_readable, MRB_ARGS_NONE());
+  mrb_define_method_id(mrb, io_uring_op_class, MRB_SYM_Q(writable),             mrb_uring_writable, MRB_ARGS_NONE());
+  mrb_define_method_id(mrb, io_uring_op_class, MRB_SYM(addrinfo),               mrb_io_uring_get_addrinfo,  MRB_ARGS_NONE());
+  mrb_define_method_id(mrb, io_uring_op_class, MRB_SYM(buf),                    mrb_io_uring_get_buf,  MRB_ARGS_NONE());
+  mrb_define_method_id(mrb, io_uring_op_class, MRB_SYM(path),                   mrb_io_uring_get_path,  MRB_ARGS_NONE());
+  mrb_define_method_id(mrb, io_uring_op_class, MRB_SYM(open_how),               mrb_io_uring_get_open_how,  MRB_ARGS_NONE());
+  mrb_define_method_id(mrb, io_uring_op_class, MRB_SYM(statx),                  mrb_io_uring_get_statx,  MRB_ARGS_NONE());
 
   struct RClass *time = mrb_class_get_id(mrb, MRB_SYM(Time));
   mrb_define_method_id(mrb, time, MRB_SYM(httpdate), time_httpdate, MRB_ARGS_NONE());

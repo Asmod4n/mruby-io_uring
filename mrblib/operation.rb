@@ -1,5 +1,5 @@
 class IO::Uring::Operation
-  attr_reader :ring, :type, :sock, :buf, :poll_mask, :file, :path, :directory, :open_how, :statx, :operation, :res, :flags, :errno
+  attr_reader :ring, :type, :sock, :poll_mask, :file, :directory, :operation, :res, :flags, :errno
   attr_accessor :userdata
 
   def buffer?
@@ -31,13 +31,14 @@ class IO::Uring::Operation
       ring: @ring,
       type: @type,
       sock: @sock,
-      buf: @buf,
+      addrinfo: addrinfo,
+      buf: buf,
       poll_mask: @poll_mask,
       file: @file,
-      path: @path,
+      path: path,
       directory: @directory,
-      open_how: @open_how,
-      statx: @statx,
+      open_how: open_how,
+      statx: statx,
       operation: @operation,
       res: @res,
       flags: @flags,

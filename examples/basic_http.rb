@@ -13,7 +13,7 @@ while true
   uring.wait do |operation|
     if operation.errno
       puts operation.inspect
-      raise operation.errno 
+      raise operation.errno
     end
     puts "Flags: #{operation.flags}"
     case operation.type

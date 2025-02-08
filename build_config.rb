@@ -6,7 +6,6 @@ MRuby::Build.new do |conf|
     #conf.cc.flags << '-Os' << '-march=native'
     conf.enable_debug
     conf.enable_test
-    conf.enable_bintest
     conf.gembox 'full-core'
     conf.gem File.expand_path(File.dirname(__FILE__))
     conf.gem mgem: 'mruby-phr'
