@@ -10,16 +10,16 @@ mrb_io_uring_queue_init_params(mrb_state *mrb, mrb_value self)
   }
   entries = MIN(entries, 32768);
   if (unlikely(flags < 0)) {
-    mrb_raise(mrb, E_ARGUMENT_ERROR, "flags musn't be negative");
+    mrb_raise(mrb, E_ARGUMENT_ERROR, "flags mustn't be negative");
   }
   flags |= IORING_SETUP_SINGLE_ISSUER|IORING_SETUP_COOP_TASKRUN|IORING_SETUP_DEFER_TASKRUN;
 
   struct rlimit limit;
-  if (unlikely(getrlimit(RLIMIT_MEMLOCK, &limit)) == -1) {
+  if (unlikely(getrlimit(RLIMIT_MEMLOCK, &limit) == -1)) {
     mrb_sys_fail(mrb, "getrlimit");
   }
   limit.rlim_cur = limit.rlim_max;
-  if (unlikely(setrlimit(RLIMIT_MEMLOCK, &limit)) == -1) {
+  if (unlikely(setrlimit(RLIMIT_MEMLOCK, &limit) == -1)) {
     mrb_sys_fail(mrb, "setrlimit");
   }
 
@@ -561,7 +561,7 @@ mrb_io_uring_prep_read(mrb_state *mrb, mrb_value self)
 
   if (nbytes <= 0) {
     struct stat st;
-    if (likely(fstat(filefd, &st)) == 0) {
+    if (likely(fstat(filefd, &st) == 0)) {
         nbytes = st.st_size;
     } else {
       mrb_sys_fail(mrb, "fstat");
@@ -767,12 +767,12 @@ mrb_io_uring_prep_statx(mrb_state *mrb, mrb_value self)
 }
 
 static mrb_int
-mask_device(mrb_int major, mrb_int minor)
+mask_device(__u32 major, __u32 minor)
 {
   return (major << 8) | minor;
 }
 
-static void
+static mrb_value
 mrb_statx_set_instance_variables(mrb_state *mrb, mrb_value statx, struct statx *stx)
 {
   mrb_iv_set(mrb, statx, MRB_IVSYM(mask), mrb_int_value(mrb, stx->stx_mask));
@@ -820,65 +820,47 @@ mrb_statx_set_instance_variables(mrb_state *mrb, mrb_value statx, struct statx *
 
 #ifdef STATX_ATTR_COMPRESSED
   if (stx->stx_attributes_mask & STATX_ATTR_COMPRESSED) {
-    if (stx->stx_attributes & STATX_ATTR_COMPRESSED) {
-      mrb_iv_set(mrb, statx, MRB_IVSYM(attr_compressed), mrb_true_value());
-    }
+    mrb_iv_set(mrb, statx, MRB_IVSYM(attr_compressed), mrb_bool_value(stx->stx_attributes & STATX_ATTR_COMPRESSED));
   }
 #endif
 #ifdef STATX_ATTR_IMMUTABLE
   if (stx->stx_attributes_mask & STATX_ATTR_IMMUTABLE) {
-    if (stx->stx_attributes & STATX_ATTR_IMMUTABLE) {
-      mrb_iv_set(mrb, statx, MRB_IVSYM(attr_immutable), mrb_true_value());
-    }
+    mrb_iv_set(mrb, statx, MRB_IVSYM(attr_immutable), mrb_bool_value(stx->stx_attributes & STATX_ATTR_IMMUTABLE));
   }
 #endif
 #ifdef STATX_ATTR_APPEND
   if (stx->stx_attributes_mask & STATX_ATTR_APPEND) {
-    if (stx->stx_attributes & STATX_ATTR_APPEND) {
-      mrb_iv_set(mrb, statx, MRB_IVSYM(attr_append), mrb_true_value());
-    }
+    mrb_iv_set(mrb, statx, MRB_IVSYM(attr_append), mrb_bool_value(stx->stx_attributes & STATX_ATTR_APPEND));
   }
 #endif
 #ifdef STATX_ATTR_NODUMP
   if (stx->stx_attributes_mask & STATX_ATTR_NODUMP) {
-    if (stx->stx_attributes & STATX_ATTR_NODUMP) {
-      mrb_iv_set(mrb, statx, MRB_IVSYM(attr_nodump), mrb_true_value());
-    }
+    mrb_iv_set(mrb, statx, MRB_IVSYM(attr_nodump), mrb_bool_value(stx->stx_attributes & STATX_ATTR_NODUMP));
   }
 #endif
 #ifdef STATX_ATTR_ENCRYPTED
   if (stx->stx_attributes_mask & STATX_ATTR_ENCRYPTED) {
-    if (stx->stx_attributes & STATX_ATTR_ENCRYPTED) {
-      mrb_iv_set(mrb, statx, MRB_IVSYM(attr_encrypted), mrb_true_value());
-    }
+    mrb_iv_set(mrb, statx, MRB_IVSYM(attr_encrypted), mrb_bool_value(stx->stx_attributes & STATX_ATTR_ENCRYPTED));
   }
 #endif
 #ifdef STATX_ATTR_AUTOMOUNT
   if (stx->stx_attributes_mask & STATX_ATTR_AUTOMOUNT) {
-    if (stx->stx_attributes & STATX_ATTR_AUTOMOUNT) {
-      mrb_iv_set(mrb, statx, MRB_IVSYM(attr_automount), mrb_true_value());
-    }
+    mrb_iv_set(mrb, statx, MRB_IVSYM(attr_automount), mrb_bool_value(stx->stx_attributes & STATX_ATTR_AUTOMOUNT));
   }
 #endif
 #ifdef STATX_ATTR_MOUNT_ROOT
   if (stx->stx_attributes_mask & STATX_ATTR_MOUNT_ROOT) {
-    if (stx->stx_attributes & STATX_ATTR_MOUNT_ROOT) {
-      mrb_iv_set(mrb, statx, MRB_IVSYM(attr_mount_root), mrb_true_value());
-    }
+    mrb_iv_set(mrb, statx, MRB_IVSYM(attr_mount_root), mrb_bool_value(stx->stx_attributes & STATX_ATTR_MOUNT_ROOT));
   }
 #endif
 #ifdef STATX_ATTR_VERITY
   if (stx->stx_attributes_mask & STATX_ATTR_VERITY) {
-    if (stx->stx_attributes & STATX_ATTR_VERITY) {
-      mrb_iv_set(mrb, statx, MRB_IVSYM(attr_verity), mrb_true_value());
-    }
+    mrb_iv_set(mrb, statx, MRB_IVSYM(attr_verity), mrb_bool_value(stx->stx_attributes & STATX_ATTR_VERITY));
   }
 #endif
 #ifdef STATX_ATTR_DAX
   if (stx->stx_attributes_mask & STATX_ATTR_DAX) {
-    if (stx->stx_attributes & STATX_ATTR_DAX) {
-      mrb_iv_set(mrb, statx, MRB_IVSYM(attr_dax), mrb_true_value());
-    }
+    mrb_iv_set(mrb, statx, MRB_IVSYM(attr_dax), mrb_bool_value(stx->stx_attributes & STATX_ATTR_DAX));
   }
 #endif
 
@@ -908,13 +890,13 @@ mrb_statx_set_instance_variables(mrb_state *mrb, mrb_value statx, struct statx *
   }
 #endif
 
-  // Conditionally set device fields
   if (stx->stx_rdev_major || stx->stx_rdev_minor) {
     mrb_iv_set(mrb, statx, MRB_IVSYM(rdev), mrb_int_value(mrb, mask_device(stx->stx_rdev_major, stx->stx_rdev_minor)));
     mrb_iv_set(mrb, statx, MRB_IVSYM(rdev_major), mrb_int_value(mrb, stx->stx_rdev_major));
     mrb_iv_set(mrb, statx, MRB_IVSYM(rdev_minor), mrb_int_value(mrb, stx->stx_rdev_minor));
   }
 
+  mrb_iv_set(mrb, statx, MRB_IVSYM(dev), mrb_int_value(mrb, mask_device(stx->stx_dev_major, stx->stx_dev_minor)));
   mrb_iv_set(mrb, statx, MRB_IVSYM(dev_major), mrb_int_value(mrb, stx->stx_dev_major));
   mrb_iv_set(mrb, statx, MRB_IVSYM(dev_minor), mrb_int_value(mrb, stx->stx_dev_minor));
 
@@ -941,6 +923,8 @@ mrb_statx_set_instance_variables(mrb_state *mrb, mrb_value statx, struct statx *
     mrb_iv_set(mrb, statx, MRB_IVSYM(atomic_write_segments_max), mrb_int_value(mrb, stx->stx_atomic_write_segments_max));
   }
 #endif
+
+  return statx;
 }
 
 static mrb_value
@@ -961,8 +945,7 @@ mrb_statx_initialize(mrb_state *mrb, mrb_value self)
     mrb_sys_fail(mrb, "statx");
   }
 
-  mrb_statx_set_instance_variables(mrb, self, &stx);
-  return self;
+  return mrb_statx_set_instance_variables(mrb, self, &stx);
 }
 
 static mrb_value
@@ -1361,12 +1344,12 @@ mrb_io_uring_operation_class_init(mrb_state *mrb, mrb_value self)
   }
 
   for (mrb_int i = 0; i < argc;) {
-    mrb_value key = argv[i++];
-    if (unlikely(!mrb_symbol_p(key))) {
+    mrb_value arg_key = argv[i++];
+    if (unlikely(!mrb_symbol_p(arg_key))) {
       mrb_raise(mrb, E_TYPE_ERROR, "expected symbol for key");
     }
 
-    mrb_iv_set(mrb, self, mrb_symbol(key), argv[i++]);
+    mrb_iv_set(mrb, self, mrb_symbol(arg_key), argv[i++]);
   }
 
   return self;
