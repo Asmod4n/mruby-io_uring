@@ -184,7 +184,6 @@ mrb_io_uring_prep_accept(mrb_state *mrb, mrb_value self)
   mrb_int flags = 0, sqe_flags = 0;
   mrb_get_args(mrb, "o|ii", &sock, &flags, &sqe_flags);
 
-
   mrb_io_uring_t *mrb_io_uring = DATA_PTR(self);
   mrb_value argv[] = {
     mrb_symbol_value(MRB_IVSYM(ring)), self,
@@ -973,7 +972,6 @@ mrb_io_uring_process_cqe(mrb_state *mrb, mrb_io_uring_t *mrb_io_uring, struct io
           mrb_raise(mrb, E_TYPE_ERROR, "buf not found");
         }
       } break;
-      case MRB_IORING_OP_ACCEPT:
       case MRB_IORING_OP_SOCKET:
         mrb_iv_set(mrb, operation, MRB_IVSYM(sock), res);
       break;

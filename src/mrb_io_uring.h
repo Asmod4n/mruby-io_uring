@@ -67,7 +67,6 @@ typedef struct {
 
 enum mrb_io_uring_op {
   MRB_IORING_OP_READ_FIXED,
-  MRB_IORING_OP_ACCEPT,
   MRB_IORING_OP_SOCKET,
   MRB_IORING_OP_READ,
   MRB_IORING_OP_RECV,
@@ -82,7 +81,8 @@ enum mrb_io_uring_op {
   MRB_IORING_OP_POLL_ADD,
   MRB_IORING_OP_POLL_MULTISHOT,
   MRB_IORING_OP_POLL_UPDATE,
-  MRB_IORING_OP_CANCEL
+  MRB_IORING_OP_CANCEL,
+  MRB_IORING_OP_ACCEPT
 };
 
 static int can_use_high_bits = 0;
