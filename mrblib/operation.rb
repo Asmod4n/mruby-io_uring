@@ -1,5 +1,5 @@
 class IO::Uring::Operation
-  attr_reader :ring, :type, :sock, :poll_mask, :file, :directory, :operation, :res, :flags, :errno
+  attr_reader :ring, :type, :sock, :client_sock, :poll_mask, :file, :directory, :operation, :res, :flags, :errno
   attr_accessor :userdata
 
   def buffer?
@@ -23,6 +23,10 @@ class IO::Uring::Operation
       @sock.fileno
     elsif @file
       @file.fileno
+    elsif @client_sock
+      @client_sock.fileno
+    else
+      nil
     end
   end
 

@@ -975,6 +975,9 @@ mrb_io_uring_process_cqe(mrb_state *mrb, mrb_io_uring_t *mrb_io_uring, struct io
       case MRB_IORING_OP_SOCKET:
         mrb_iv_set(mrb, operation, MRB_IVSYM(sock), res);
       break;
+      case MRB_IORING_OP_ACCEPT:
+        mrb_iv_set(mrb, operation, MRB_IVSYM(client_sock), res);
+      break;
       case MRB_IORING_OP_READ:
       case MRB_IORING_OP_RECV: {
         mrb_value index_val = mrb_iv_get(mrb, operation, MRB_SYM(buf_index));
@@ -1032,7 +1035,7 @@ mrb_io_uring_process_cqe(mrb_state *mrb, mrb_io_uring_t *mrb_io_uring, struct io
 }
 
 static mrb_value
-mrb_io_uring_iterate_over_cqes(mrb_state *mrb, mrb_io_uring_t *mrb_io_uring, mrb_value block, struct io_uring_cqe *cqe, int rc)
+mrb_io_uring_for_each_cqe(mrb_state *mrb, mrb_io_uring_t *mrb_io_uring, mrb_value block, struct io_uring_cqe *cqe, int rc)
 {
   struct mrb_jmpbuf* prev_jmp = mrb->jmp;
   struct mrb_jmpbuf c_jmp;
@@ -1085,7 +1088,7 @@ mrb_io_uring_submit_and_wait_timeout(mrb_state *mrb, mrb_value self)
 
   struct io_uring_cqe *cqe = NULL;
   int rc;
-  if (timeout >= 0) {
+  if (timeout > 0) {
     timeout += 1e-17; // we are adding this so ts can't become negative.
     struct __kernel_timespec ts = {
       .tv_sec  = timeout,
@@ -1103,7 +1106,7 @@ mrb_io_uring_submit_and_wait_timeout(mrb_state *mrb, mrb_value self)
     mrb_sys_fail(mrb, "io_uring_submit_and_wait_timeout");
   }
 
-  return mrb_io_uring_iterate_over_cqes(mrb, mrb_io_uring, block, cqe, rc);
+  return mrb_io_uring_for_each_cqe(mrb, mrb_io_uring, block, cqe, rc);
 }
 
 static __u64
@@ -1355,74 +1358,81 @@ mrb_io_uring_operation_class_init(mrb_state *mrb, mrb_value self)
 }
 
 static mrb_value
+mrb_io_uring_get_io_socket(mrb_state *mrb, mrb_value sock_obj)
+{
+  struct RClass *socket_class = NULL;
+  struct sockaddr_storage addr;
+  socklen_t addrlen = sizeof(addr);
+  int sockfd = (int) mrb_integer(mrb_type_convert(mrb, sock_obj, MRB_TT_INTEGER, MRB_SYM(fileno)));
+
+  int is_accept;
+  socklen_t optlen = sizeof(is_accept);
+
+  if (unlikely(getsockopt(sockfd, SOL_SOCKET, SO_ACCEPTCONN, &is_accept, &optlen) == -1)) {
+    mrb_raise(mrb, E_RUNTIME_ERROR, "failed to get socket options");
+  }
+
+  if (unlikely(getsockname(sockfd, (struct sockaddr *)&addr, &addrlen) == -1)) {
+    mrb_raise(mrb, E_RUNTIME_ERROR, "failed to get socket name");
+  }
+
+  switch (addr.ss_family) {
+    case AF_UNIX:
+      socket_class = is_accept ? mrb_class_get_id(mrb, MRB_SYM(UNIXServer)) : mrb_class_get_id(mrb, MRB_SYM(UNIXSocket));
+      break;
+    case AF_INET:
+    case AF_INET6:
+      if (is_accept) {
+        socket_class = mrb_class_get_id(mrb, MRB_SYM(TCPServer));
+      } else {
+        int socktype;
+        if (unlikely(getsockopt(sockfd, SOL_SOCKET, SO_TYPE, &socktype, &optlen) == -1)) {
+          mrb_raise(mrb, E_RUNTIME_ERROR, "failed to get socket type");
+        }
+        switch (socktype) {
+          case SOCK_STREAM:
+            socket_class = mrb_class_get_id(mrb, MRB_SYM(TCPSocket));
+            break;
+          case SOCK_DGRAM:
+            socket_class = mrb_class_get_id(mrb, MRB_SYM(UDPSocket));
+            break;
+          default: {
+            socket_class = mrb_class_get_id(mrb, MRB_SYM(Socket));
+          }
+        }
+      } break;
+    default: {
+      socket_class = mrb_class_get_id(mrb, MRB_SYM(Socket));
+    }
+  }
+
+  mrb_value socket_obj = mrb_funcall_id(mrb, mrb_obj_value(socket_class), MRB_SYM(for_fd), 1, sock_obj);
+  (void)mrb_io_fileno(mrb, socket_obj);
+  ((struct mrb_io *)DATA_PTR(socket_obj))->close_fd = 0;
+  return socket_obj;
+}
+
+static mrb_value
 mrb_io_uring_operation_to_io(mrb_state *mrb, mrb_value self)
 {
-  mrb_value sock_obj, file_obj;
 
-  sock_obj = mrb_iv_get(mrb, self, MRB_IVSYM(sock));
-  file_obj = mrb_iv_get(mrb, self, MRB_IVSYM(file));
-
+  mrb_value sock_obj = mrb_iv_get(mrb, self, MRB_IVSYM(sock));
   if (!mrb_nil_p(sock_obj)) {
-    struct RClass *socket_class = NULL;
-    struct sockaddr_storage addr;
-    socklen_t addrlen = sizeof(addr);
-    int sockfd = (int) mrb_integer(mrb_type_convert(mrb, sock_obj, MRB_TT_INTEGER, MRB_SYM(fileno)));
-
-    int is_accept;
-    socklen_t optlen = sizeof(is_accept);
-
-    if (unlikely(getsockopt(sockfd, SOL_SOCKET, SO_ACCEPTCONN, &is_accept, &optlen) == -1)) {
-      mrb_raise(mrb, E_RUNTIME_ERROR, "failed to get socket options");
-    }
-
-    if (unlikely(getsockname(sockfd, (struct sockaddr *)&addr, &addrlen) == -1)) {
-      mrb_raise(mrb, E_RUNTIME_ERROR, "failed to get socket name");
-    }
-
-    switch (addr.ss_family) {
-      case AF_UNIX:
-        socket_class = is_accept ? mrb_class_get_id(mrb, MRB_SYM(UNIXServer)) : mrb_class_get_id(mrb, MRB_SYM(UNIXSocket));
-        break;
-      case AF_INET:
-      case AF_INET6:
-        if (is_accept) {
-          socket_class = mrb_class_get_id(mrb, MRB_SYM(TCPServer));
-        } else {
-          int socktype;
-          if (unlikely(getsockopt(sockfd, SOL_SOCKET, SO_TYPE, &socktype, &optlen) == -1)) {
-            mrb_raise(mrb, E_RUNTIME_ERROR, "failed to get socket type");
-          }
-          switch (socktype) {
-            case SOCK_STREAM:
-              socket_class = mrb_class_get_id(mrb, MRB_SYM(TCPSocket));
-              break;
-            case SOCK_DGRAM:
-              socket_class = mrb_class_get_id(mrb, MRB_SYM(UDPSocket));
-              break;
-            default: {
-              socket_class = mrb_class_get_id(mrb, MRB_SYM(Socket));
-            }
-          }
-        } break;
-      default: {
-        socket_class = mrb_class_get_id(mrb, MRB_SYM(Socket));
-      }
-    }
-
-    mrb_value socket_obj = mrb_funcall_id(mrb, mrb_obj_value(socket_class), MRB_SYM(for_fd), 1, sock_obj);
-    (void)mrb_io_fileno(mrb, socket_obj);
-    ((struct mrb_io *)DATA_PTR(socket_obj))->close_fd = 0;
-    return socket_obj;
-
-  } else if (!mrb_nil_p(file_obj)) {
+    return mrb_io_uring_get_io_socket(mrb, sock_obj);
+  }
+  mrb_value client_sock_obj = mrb_iv_get(mrb, self, MRB_IVSYM(client_sock));
+  if (!mrb_nil_p(client_sock_obj)) {
+    return mrb_io_uring_get_io_socket(mrb, client_sock_obj);
+  }
+  mrb_value file_obj = mrb_iv_get(mrb, self, MRB_IVSYM(file));
+  if (!mrb_nil_p(file_obj)) {
     file_obj = mrb_obj_new(mrb, mrb_class_get_id(mrb, MRB_SYM(File)), 1, &file_obj);
     (void)mrb_io_fileno(mrb, file_obj);
     ((struct mrb_io *)DATA_PTR(file_obj))->close_fd = 0;
     return file_obj;
-  } else {
-    mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid @sock or @file descriptor");
   }
 
+  mrb_raise(mrb, E_ARGUMENT_ERROR, "found no descriptor");
 }
 
 static mrb_value
