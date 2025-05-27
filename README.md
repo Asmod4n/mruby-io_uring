@@ -49,7 +49,7 @@ while true
       puts "Remote Address: #{operation.to_io.remote_address.inspect}"
       puts "Socket        : #{operation.res}"
       uring.prep_recv(operation.res)
-      #operation.res  is the accepted socket
+      #operation.client_sock is the accepted socket
       #operation.sock is the socket passed to prep_accept, aka the server socket.
     when :recv
       next if operation.res == 0
