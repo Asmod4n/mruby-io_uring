@@ -1,5 +1,5 @@
 class IO::Uring::Operation
-  attr_reader :ring, :type, :sock, :client_sock, :poll_mask, :file, :directory, :operation, :res, :flags, :errno
+  attr_reader :ring, :type, :sock, :splice_socks, :poll_mask, :file, :directory, :operation, :res, :flags, :errno
   attr_accessor :userdata
 
   def buffer?
@@ -18,23 +18,12 @@ class IO::Uring::Operation
     flags & CQE_F_NOTIF != 0
   end
 
-  def fileno
-    if @sock
-      @sock.fileno
-    elsif @file
-      @file.fileno
-    elsif @client_sock
-      @client_sock.fileno
-    else
-      nil
-    end
-  end
-
   def inspect
     attrs = {
       ring: @ring,
       type: @type,
       sock: @sock,
+      splice_socks: @splice_socks,
       addrinfo: addrinfo,
       buf: buf,
       poll_mask: @poll_mask,

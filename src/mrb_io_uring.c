@@ -316,7 +316,7 @@ mrb_io_uring_prep_splice(mrb_state *mrb, mrb_value self)
   mrb_value argv[] = {
     mrb_symbol_value(MRB_IVSYM(ring)), self,
     mrb_symbol_value(MRB_IVSYM(type)), mrb_symbol_value(MRB_SYM(splice)),
-    mrb_symbol_value(MRB_IVSYM(sock)), mrb_assoc_new(mrb, fd_in, fd_out)
+    mrb_symbol_value(MRB_IVSYM(splice_socks)), mrb_assoc_new(mrb, fd_in, fd_out)
   };
   mrb_value operation = mrb_obj_new(mrb, mrb_io_uring->operation_class, NELEMS(argv), argv);
   uint64_t encoded_operation = encode_operation_op(mrb, mrb_ptr(operation), MRB_IORING_OP_SPLICE);
@@ -973,10 +973,8 @@ mrb_io_uring_process_cqe(mrb_state *mrb, mrb_io_uring_t *mrb_io_uring, struct io
         }
       } break;
       case MRB_IORING_OP_SOCKET:
-        mrb_iv_set(mrb, operation, MRB_IVSYM(sock), res);
-      break;
       case MRB_IORING_OP_ACCEPT:
-        mrb_iv_set(mrb, operation, MRB_IVSYM(client_sock), res);
+        mrb_iv_set(mrb, operation, MRB_IVSYM(sock), res);
       break;
       case MRB_IORING_OP_READ:
       case MRB_IORING_OP_RECV: {
@@ -1321,7 +1319,7 @@ mrb_io_uring_open_how_init(mrb_state *mrb, mrb_value self)
 
   how->flags = mrb_io_uring_parse_flags_string(mrb, flags_val);
   if (mode == -1) {
-    how->mode = (how->flags & (O_CREAT | O_TMPFILE)) ? 0666 : 0;
+    how->mode = mode = (how->flags & (O_CREAT | O_TMPFILE)) ? 0666 : 0;
   } else {
     how->mode = (unsigned long long) mode;
   }
@@ -1415,15 +1413,11 @@ mrb_io_uring_get_io_socket(mrb_state *mrb, mrb_value sock_obj)
 static mrb_value
 mrb_io_uring_operation_to_io(mrb_state *mrb, mrb_value self)
 {
-
   mrb_value sock_obj = mrb_iv_get(mrb, self, MRB_IVSYM(sock));
   if (!mrb_nil_p(sock_obj)) {
     return mrb_io_uring_get_io_socket(mrb, sock_obj);
   }
-  mrb_value client_sock_obj = mrb_iv_get(mrb, self, MRB_IVSYM(client_sock));
-  if (!mrb_nil_p(client_sock_obj)) {
-    return mrb_io_uring_get_io_socket(mrb, client_sock_obj);
-  }
+
   mrb_value file_obj = mrb_iv_get(mrb, self, MRB_IVSYM(file));
   if (!mrb_nil_p(file_obj)) {
     file_obj = mrb_obj_new(mrb, mrb_class_get_id(mrb, MRB_SYM(File)), 1, &file_obj);
@@ -1481,6 +1475,22 @@ static mrb_value
 mrb_io_uring_get_statx(mrb_state *mrb, mrb_value self)
 {
   return mrb_iv_get(mrb, self, MRB_SYM(statx));
+}
+
+static mrb_value
+mrb_io_uring_get_fileno(mrb_state *mrb, mrb_value self)
+{
+
+  mrb_value sock = mrb_iv_get(mrb, self, MRB_IVSYM(sock));
+  if (!mrb_nil_p(sock)) {
+    return mrb_type_convert(mrb, sock, MRB_TT_INTEGER, MRB_SYM(fileno));
+  }
+  mrb_value file = mrb_iv_get(mrb, self, MRB_IVSYM(file));
+  if (!mrb_nil_p(file)) {
+    return mrb_type_convert(mrb, file, MRB_TT_INTEGER, MRB_SYM(fileno));
+  }
+
+  mrb_raise(mrb, E_IO_URING_ERROR, "no file descriptor found in operation");
 }
 
 static void
@@ -1590,7 +1600,6 @@ mrb_mruby_io_uring_gem_init(mrb_state* mrb)
     initialize_high_bits_check_once(mrb);
   }
   pthread_mutex_unlock(&mutex);
-
 
   struct RClass *io_uring_class, *io_uring_error_class, *io_uring_op_class, *io_uring_open_how_class;
 
@@ -1778,6 +1787,7 @@ mrb_mruby_io_uring_gem_init(mrb_state* mrb)
   mrb_define_method_id(mrb, io_uring_op_class, MRB_SYM(path),                   mrb_io_uring_get_path,  MRB_ARGS_NONE());
   mrb_define_method_id(mrb, io_uring_op_class, MRB_SYM(open_how),               mrb_io_uring_get_open_how,  MRB_ARGS_NONE());
   mrb_define_method_id(mrb, io_uring_op_class, MRB_SYM(statx),                  mrb_io_uring_get_statx,  MRB_ARGS_NONE());
+  mrb_define_method_id(mrb, io_uring_op_class, MRB_SYM(fileno),                 mrb_io_uring_get_fileno,  MRB_ARGS_NONE());
 
   struct RClass *time = mrb_class_get_id(mrb, MRB_SYM(Time));
   mrb_define_method_id(mrb, time, MRB_SYM(httpdate), time_httpdate, MRB_ARGS_NONE());
