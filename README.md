@@ -48,9 +48,7 @@ while true
     when :multishot_accept
       puts "Remote Address: #{operation.to_io.remote_address.inspect}"
       puts "Socket        : #{operation.res}"
-      uring.prep_recv(operation.res)
-      #operation.client_sock is the accepted socket
-      #operation.sock is the socket passed to prep_accept, aka the server socket.
+      uring.prep_recv(operation.sock)
     when :recv
       next if operation.res == 0
       ret = phr.parse_request(operation.buf)
@@ -100,6 +98,11 @@ IO::Uring::OpenHow.new(flags = nil, mode = 0, resolve = nil)
 - `x`: `O_EXCL` (error if file exists)
 - `D`: `O_DIRECTORY` (must be a directory)
 - `P`: `O_PATH` (resolve pathname, do not open file)
+
+### Modes
+
+Modes are those you would also use with chmod, aka 0666 to create a file which is read and writable by everyone.
+Take a look at https://en.wikipedia.org/wiki/Chmod for more info, only the numeric modes are supported as of now.
 
 ### Supported Resolve
 
