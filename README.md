@@ -1,10 +1,10 @@
 # mruby-io_uring
 
-io_uring for mruby (WIP)
+io_uring for mruby
 
 Requirements
 ============
-This is only working with a linux kernel.
+This is only working with a linux kernel and works best with a Kernel 6 or newer.
 
 Installation
 ============
@@ -23,7 +23,7 @@ String ownership
 Functions which end in _fixed use a internal and private buffer pool, those buffers are mruby Strings and belong to the ring, not to you, they are frozen at all times and you musn't change their contents.
 
 When you are done with a fixed buffer you have to return them to the ring with ring.return_used_buffer(operation), take a look at the file_benchmark.rb in the example dir for a example.
-Performance of _fixed functions can be much higher.
+Performance of _fixed functions can be several magnitudes faster then functions which allocate new buffers for each operation.
 
 Every other function which takes a string argument freezes that string till io_uring has processed it and given back to you in a ring.wait block, where its unfrozen. If you gave the ring a frozen string, it returns frozen back to you.
 
@@ -32,12 +32,13 @@ Here is an example on how to use them (requires mruby-phr for http parsing)
 -------------------------------------
 ```ruby
 body = "hallo\n"
-headers = "HTTP/1.1 200 OK\r\nConnection: keep-alive\r\nContent-Type: text/plain\r\nContent-Length: #{body.bytesize}\r\n\r\n"
+headers = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: #{body.bytesize}\r\n\r\n"
 response = "#{headers}#{body}"
 uring = IO::Uring.new
 server = TCPServer.new(12345)
+server._setnonblock(true)
 server.listen(4096)
-uring.prep_multishot_accept(server)
+uring.prep_multishot_accept(server, SOCK_NONBLOCK)
 
 phr = Phr.new
 
@@ -46,8 +47,8 @@ while true
     raise operation.errno if operation.errno
     case operation.type
     when :multishot_accept
-      puts "Remote Address: #{operation.to_io.remote_address.inspect}"
-      puts "Socket        : #{operation.res}"
+      #puts "Remote Address: #{operation.to_io.remote_address.inspect}"
+      #puts "Socket        : #{operation.res}"
       uring.prep_recv(operation.sock)
     when :recv
       next if operation.res == 0
@@ -58,16 +59,15 @@ while true
         phr.reset
         next
       when Integer
-        puts "HTTP Method   : #{phr.method}"
-        puts "HTTP Version  : 1.#{phr.minor_version}"
-        puts "HTTP Path     : #{phr.path}"
-        puts "HTTP Headers  : #{phr.headers.inspect}"
-        puts "HTTP Body     : #{operation.buf.byteslice(ret..-1).inspect}"
+        #puts "HTTP Method   : #{phr.method}"
+        #puts "HTTP Version  : 1.#{phr.minor_version}"
+        #puts "HTTP Path     : #{phr.path}"
+        #puts "HTTP Headers  : #{phr.headers.inspect}"
+        #puts "HTTP Body     : #{operation.buf.byteslice(ret..-1).inspect}"
       end
       phr.reset
-      uring.prep_send(operation.sock, response)
-    when :send
-      uring.prep_close(operation.sock)
+      uring.prep_send(operation.sock, response, 0)
+      uring.prep_recv(operation.sock)
     end
   end
 end
@@ -75,11 +75,12 @@ end
 
 uring.wait accepts two arguments, the number of operations to wait for, by default 1, and a timeout as a float value, if a timeout occurs false is returned.
 
-
 API Docs
 ========
 
-IO::Uring::OpenHow.new(flags = nil, mode = 0, resolve = nil)
+uring = IO::Uring.new(fixed_buffer_size = 65536, entries = 2048, flags = 0)
+
+open_how = OpenHow.new(flags = nil, mode = 0, resolve = nil)
 
 ### Supported Flags
 

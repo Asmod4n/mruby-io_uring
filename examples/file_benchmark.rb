@@ -20,18 +20,9 @@ def measure_performance(ring, fd, filesize)
     current_pos += ring.fixed_buffer_size
 
     # Run ring.wait with the number of completion queue events to wait for
-    ring.wait(num_operations, 1) do |operation|
-      if operation.errno
-        puts operation.inspect
-        raise operation.errno
-      end
-      case operation.type
-      when :read_fixed
-        read_bytes += operation.res
-        ring.return_used_buffer(operation)
-      else
-        raise "unkown operation: #{operation.inspect}"
-      end
+    ring.wait(num_operations) do |operation|
+      read_bytes += operation.res
+      ring.return_used_buffer(operation)
       i += 1
     end
 

@@ -1,5 +1,4 @@
 #pragma once
-#define _GNU_SOURCE
 #define _LARGEFILE64_SOURCE
 #include <liburing.h>
 #include <mruby.h>
@@ -15,7 +14,6 @@
 #include <mruby/string.h>
 #include <mruby/class.h>
 #include <sys/poll.h>
-#include <mruby/throw.h>
 #include <mruby/ext/io.h>
 #include <sys/param.h>
 #include <stdlib.h>
@@ -29,6 +27,8 @@
 #include <sys/stat.h>
 #include <sys/syscall.h>
 #include <mruby/presym.h>
+#include <netinet/in.h>
+#include <mruby/num_helpers.hpp>
 
 #ifndef NSEC_PER_SEC
 #define NSEC_PER_SEC 1000000000
@@ -44,7 +44,7 @@ typedef struct {
   struct io_uring_params params;
   mrb_value sqes;
   struct RClass *operation_class;
-  mrb_int fixed_buffer_size;
+  size_t fixed_buffer_size;
   mrb_value buffers;
   mrb_value free_list;
 } mrb_io_uring_t;
@@ -73,6 +73,7 @@ enum mrb_io_uring_op {
   MRB_IORING_OP_RECV,
   MRB_IORING_OP_WRITE,
   MRB_IORING_OP_SEND,
+  MRB_IORING_OP_UNLINKAT,
   MRB_IORING_OP_OPENAT2,
   MRB_IORING_OP_STATX,
   MRB_IORING_OP_CONNECT,
@@ -82,57 +83,65 @@ enum mrb_io_uring_op {
   MRB_IORING_OP_POLL_ADD,
   MRB_IORING_OP_POLL_MULTISHOT,
   MRB_IORING_OP_POLL_UPDATE,
-  MRB_IORING_OP_CANCEL
+  MRB_IORING_OP_CANCEL,
+  MRB_IORING_OP_BIND,
+  MRB_IORING_OP_LISTEN
 };
 
-static int can_use_high_bits = 0;
+static uint8_t can_use_high_bits = 0;
 typedef struct {
     void *ptr;
     enum mrb_io_uring_op op;
-} PtrAndInt;
+} PointerWithOp;
 
-static uint64_t
+static uintptr_t
 encode_operation_op(mrb_state *mrb, void *ptr, enum mrb_io_uring_op op)
 {
   if (likely(can_use_high_bits)) {
-    return ((uint64_t)ptr & 0x0000FFFFFFFFFFFFULL) | ((uint64_t)(op) << (64 - 8));
+    size_t ptr_bits = sizeof(void*) * 8;
+    size_t op_bits = 8;
+
+    uintptr_t ptr_mask = ((uintptr_t)1 << (ptr_bits - op_bits)) - 1;
+    uintptr_t packed = ((uintptr_t)ptr & ptr_mask) | ((uintptr_t)op << (ptr_bits - op_bits));
+
+    return packed;
   } else {
-    PtrAndInt *pai = mrb_malloc(mrb, sizeof(PtrAndInt));
-    pai->ptr = ptr;
-    pai->op = op;
-    return (uint64_t)pai;
+    PointerWithOp *pwo = (PointerWithOp *) mrb_malloc(mrb, sizeof(PointerWithOp));
+    pwo->ptr = ptr;
+    pwo->op = op;
+    return (uintptr_t)pwo;
   }
 }
 
-static void *
-decode_operation(uint64_t packed_value)
+static void*
+decode_operation(uintptr_t packed_value)
 {
   if (likely(can_use_high_bits)) {
-    return (void *)(packed_value & 0x0000FFFFFFFFFFFFULL);
+    size_t ptr_bits = sizeof(void*) * 8;
+    size_t op_bits = 8;
+    uintptr_t ptr_mask = ((uintptr_t)1 << (ptr_bits - op_bits)) - 1;
+    return (void*)(packed_value & ptr_mask);
   } else {
-    PtrAndInt *pai = (PtrAndInt *)packed_value;
-    return pai->ptr;
+    PointerWithOp *pwo = (PointerWithOp *)packed_value;
+    return pwo->ptr;
   }
 }
 
 static enum mrb_io_uring_op
-decode_op(uint64_t packed_value)
+decode_op(uintptr_t packed_value)
 {
   if (likely(can_use_high_bits)) {
-    return (enum mrb_io_uring_op)(packed_value >> (64 - 8));
+    size_t ptr_bits = sizeof(void*) * 8;
+    size_t op_bits = 8;
+    return (enum mrb_io_uring_op)(packed_value >> (ptr_bits - op_bits));
   } else {
-    PtrAndInt *pai = (PtrAndInt *)packed_value;
-    return pai->op;
+    PointerWithOp *pwo = (PointerWithOp *)packed_value;
+    return pwo->op;
   }
 }
 
-static void
-mrb_io_uring_operation_gc_free(mrb_state *mrb, void *p)
-{
-  if (!can_use_high_bits) mrb_free(mrb, p);
-}
-static const struct mrb_data_type mrb_io_uring_operation_type = {
-  "$i_mrb_io_uring_operation_type", mrb_io_uring_operation_gc_free
+static struct mrb_data_type mrb_io_uring_operation_type = {
+  "$i_mrb_io_uring_operation_type", mrb_free
 };
 
 static const struct mrb_data_type mrb_io_uring_open_how_type = {
