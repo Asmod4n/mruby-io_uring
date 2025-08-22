@@ -21,4 +21,5 @@ MRuby::Gem::Specification.new('mruby-io-uring') do |spec|
   spec.cc.flags += [`pkg-config --cflags liburing`.strip]
   spec.cxx.flags += [`pkg-config --cflags liburing`.strip]
   spec.linker.flags_after_libraries += ["#{spec.build_dir}/build/lib/liburing.a"]
+  spec.cxx.flags << '-std=c++17'
 end
