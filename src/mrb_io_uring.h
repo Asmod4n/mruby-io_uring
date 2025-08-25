@@ -1,18 +1,11 @@
 #pragma once
 #define _LARGEFILE64_SOURCE
+#define _GNU_SOURCE
+
 #include <liburing.h>
-#include <mruby.h>
-#include <mruby/data.h>
 #include <pthread.h>
 #include <sys/resource.h>
-#include <mruby/error.h>
 #include <string.h>
-#include <mruby/hash.h>
-#include <mruby/variable.h>
-#include <mruby/array.h>
-#include <mruby/ext/io_uring.h>
-#include <mruby/string.h>
-#include <mruby/class.h>
 #include <sys/poll.h>
 #include <mruby/ext/io.h>
 #include <sys/param.h>
@@ -26,9 +19,20 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/syscall.h>
-#include <mruby/presym.h>
 #include <netinet/in.h>
-#include <mruby/num_helpers.hpp>
+
+extern "C" {
+#include <mruby.h>
+#include <mruby/data.h>
+#include <mruby/hash.h>
+#include <mruby/variable.h>
+#include <mruby/array.h>
+#include <mruby/ext/io_uring.h>
+#include <mruby/string.h>
+#include <mruby/class.h>
+#include <mruby/presym.h>
+#include <mruby/error.h>
+}
 
 #ifndef NSEC_PER_SEC
 #define NSEC_PER_SEC 1000000000
@@ -88,57 +92,53 @@ enum mrb_io_uring_op {
   MRB_IORING_OP_LISTEN
 };
 
-static uint8_t can_use_high_bits = 0;
+static inline void* decode_operation_inline(uintptr_t packed_value) {
+    size_t ptr_bits = sizeof(void*) * 8;
+    size_t op_bits  = 8;
+    uintptr_t ptr_mask = ((uintptr_t)1 << (ptr_bits - op_bits)) - 1;
+    return (void*)(packed_value & ptr_mask);
+}
+
+static inline enum mrb_io_uring_op decode_op_inline(uintptr_t packed_value) {
+    size_t ptr_bits = sizeof(void*) * 8;
+    size_t op_bits  = 8;
+    return (enum mrb_io_uring_op)(packed_value >> (ptr_bits - op_bits));
+}
+
+static inline uintptr_t encode_operation_op_inline(mrb_state *mrb,
+                                                   void *ptr,
+                                                   enum mrb_io_uring_op op) {
+    size_t ptr_bits = sizeof(void*) * 8;
+    size_t op_bits  = 8;
+    uintptr_t ptr_mask = ((uintptr_t)1 << (ptr_bits - op_bits)) - 1;
+    return ((uintptr_t)ptr & ptr_mask) | ((uintptr_t)op << (ptr_bits - op_bits));
+}
+
 typedef struct {
     void *ptr;
     enum mrb_io_uring_op op;
 } PointerWithOp;
 
-static uintptr_t
-encode_operation_op(mrb_state *mrb, void *ptr, enum mrb_io_uring_op op)
-{
-  if (likely(can_use_high_bits)) {
-    size_t ptr_bits = sizeof(void*) * 8;
-    size_t op_bits = 8;
+static inline void* decode_operation_heap(uintptr_t packed_value) {
+    return ((PointerWithOp *)packed_value)->ptr;
+}
 
-    uintptr_t ptr_mask = ((uintptr_t)1 << (ptr_bits - op_bits)) - 1;
-    uintptr_t packed = ((uintptr_t)ptr & ptr_mask) | ((uintptr_t)op << (ptr_bits - op_bits));
+static inline enum mrb_io_uring_op decode_op_heap(uintptr_t packed_value) {
+    return ((PointerWithOp *)packed_value)->op;
+}
 
-    return packed;
-  } else {
+static inline uintptr_t encode_operation_op_heap( mrb_state *mrb,
+                                                  void *ptr,
+                                                  enum mrb_io_uring_op op) {
     PointerWithOp *pwo = (PointerWithOp *) mrb_malloc(mrb, sizeof(PointerWithOp));
     pwo->ptr = ptr;
-    pwo->op = op;
+    pwo->op  = op;
     return (uintptr_t)pwo;
-  }
 }
 
-static void*
-decode_operation(uintptr_t packed_value)
-{
-  if (likely(can_use_high_bits)) {
-    size_t ptr_bits = sizeof(void*) * 8;
-    size_t op_bits = 8;
-    uintptr_t ptr_mask = ((uintptr_t)1 << (ptr_bits - op_bits)) - 1;
-    return (void*)(packed_value & ptr_mask);
-  } else {
-    PointerWithOp *pwo = (PointerWithOp *)packed_value;
-    return pwo->ptr;
-  }
-}
-
-static enum mrb_io_uring_op
-decode_op(uintptr_t packed_value)
-{
-  if (likely(can_use_high_bits)) {
-    size_t ptr_bits = sizeof(void*) * 8;
-    size_t op_bits = 8;
-    return (enum mrb_io_uring_op)(packed_value >> (ptr_bits - op_bits));
-  } else {
-    PointerWithOp *pwo = (PointerWithOp *)packed_value;
-    return pwo->op;
-  }
-}
+uintptr_t (*encode_operation_op)(mrb_state*, void*, enum mrb_io_uring_op);
+void* (*decode_operation)(uintptr_t);
+enum mrb_io_uring_op (*decode_op)(uintptr_t);
 
 static struct mrb_data_type mrb_io_uring_operation_type = {
   "$i_mrb_io_uring_operation_type", mrb_free

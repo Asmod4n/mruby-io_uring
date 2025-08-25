@@ -25,6 +25,7 @@ assert ('Socket io') do
             case operation.type
             when :accept
                 io_uring.prep_send(client, "hello")
+                assert_equal(operation.to_io.class, TCPSocket)
                 io_uring.prep_recv(operation.sock)
             when :recv
                 assert_equal(operation.buf, "hello")
