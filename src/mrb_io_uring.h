@@ -21,7 +21,6 @@
 #include <sys/syscall.h>
 #include <netinet/in.h>
 
-extern "C" {
 #include <mruby.h>
 #include <mruby/data.h>
 #include <mruby/hash.h>
@@ -32,7 +31,6 @@ extern "C" {
 #include <mruby/class.h>
 #include <mruby/presym.h>
 #include <mruby/error.h>
-}
 
 #ifndef NSEC_PER_SEC
 #define NSEC_PER_SEC 1000000000
@@ -89,7 +87,8 @@ enum mrb_io_uring_op {
   MRB_IORING_OP_POLL_UPDATE,
   MRB_IORING_OP_CANCEL,
   MRB_IORING_OP_BIND,
-  MRB_IORING_OP_LISTEN
+  MRB_IORING_OP_LISTEN,
+  MRB_IORING_OP_WRITE_FIXED
 };
 
 static inline void* decode_operation_inline(uintptr_t packed_value) {

@@ -1,5 +1,6 @@
 #include "mrb_io_uring.h"
 #include "mruby/data.h"
+#include "mruby/string.h"
 
 static mrb_value
 mrb_io_uring_queue_init_params(mrb_state *mrb, mrb_value self)
@@ -792,6 +793,46 @@ mrb_io_uring_prep_write(mrb_state *mrb, mrb_value self)
 
   mrb_hash_set(mrb, mrb_io_uring->sqes, operation, operation);
 
+
+  return operation;
+}
+
+static mrb_value
+mrb_io_uring_prep_write_fixed(mrb_state *mrb, mrb_value self)
+{
+  mrb_io_uring_t *mrb_io_uring = (mrb_io_uring_t *) DATA_PTR(self);
+  mrb_value file, read_operation;
+  mrb_int offset = 0, sqe_flags = 0;
+  mrb_value block = mrb_nil_value();
+  mrb_get_args(mrb, "oo|ii&", &file, &read_operation, &offset, &sqe_flags, &block);
+  mrb_data_check_type(mrb, read_operation, &mrb_io_uring_operation_type);
+  int fd = (int) mrb_integer(mrb_type_convert(mrb, file, MRB_TT_INTEGER, MRB_SYM(fileno)));
+  mrb_value index_val = mrb_iv_get(mrb, read_operation, MRB_SYM(buf_index));
+  mrb_int index = mrb_as_int(mrb, index_val);
+  mrb_value buf = mrb_ary_ref(mrb, mrb_io_uring->buffers, index);
+  if (unlikely(!mrb_string_p(buf))) {
+    mrb_raise(mrb, E_TYPE_ERROR, "buf not found");
+  }
+
+  mrb_value argv[] = {
+    mrb_symbol_value(MRB_IVSYM(ring)),    self,
+    mrb_symbol_value(MRB_IVSYM(type)),    mrb_symbol_value(MRB_SYM(write_fixed)),
+    mrb_symbol_value(MRB_IVSYM(file)),    file,
+    mrb_symbol_value(MRB_SYM(buf)),       buf,
+    mrb_symbol_value(MRB_SYM(buf_index)), index_val,
+    mrb_symbol_value(MRB_SYM(block)),     block
+  };
+  mrb_value operation = mrb_obj_new(mrb, mrb_io_uring->operation_class, NELEMS(argv), argv);
+  uintptr_t encoded_operation = encode_operation_op(mrb, mrb_ptr(operation), MRB_IORING_OP_WRITE_FIXED);
+  mrb_data_init(operation, (void *) encoded_operation, &mrb_io_uring_operation_type);
+  struct io_uring_sqe *sqe = mrb_io_uring_get_sqe(mrb, &mrb_io_uring->ring);
+  io_uring_sqe_set_flags(sqe, (unsigned int) sqe_flags);
+  io_uring_sqe_set_data(sqe, (void *) encoded_operation);
+  io_uring_prep_write_fixed(sqe,
+    fd,
+    RSTRING_PTR(buf), RSTRING_LEN(buf),
+    (unsigned long long) offset, index);
+  mrb_hash_set(mrb, mrb_io_uring->sqes, operation, operation);
 
   return operation;
 }
@@ -1878,6 +1919,7 @@ mrb_mruby_io_uring_gem_init(mrb_state* mrb)
     mrb_define_method_id(mrb, io_uring_class, MRB_SYM(fixed_buffer_size),       mrb_io_uring_get_fixed_buffer_size,   MRB_ARGS_NONE());
     mrb_define_method_id(mrb, io_uring_class, MRB_SYM(prep_read_fixed),         mrb_io_uring_prep_read_fixed,         MRB_ARGS_ARG(1, 2)|MRB_ARGS_BLOCK());
     mrb_define_method_id(mrb, io_uring_class, MRB_SYM(return_used_buffer),      mrb_io_uring_return_used_buffer,      MRB_ARGS_REQ(1));
+    mrb_define_method_id(mrb, io_uring_class, MRB_SYM(prep_write_fixed), mrb_io_uring_prep_write_fixed, MRB_ARGS_ARG(3, 2)|MRB_ARGS_BLOCK());
   }
   mrb_define_method_id(mrb, io_uring_class,   MRB_SYM(wait),                     mrb_io_uring_submit_and_wait_timeout, MRB_ARGS_OPT(2)|MRB_ARGS_BLOCK());
 
