@@ -12,7 +12,6 @@
 #include <stdlib.h>
 #include <sys/stat.h>
 #include <fcntl.h>
-#include <linux/stat.h>
 #include <errno.h>
 #include <string.h>
 #include <unistd.h>

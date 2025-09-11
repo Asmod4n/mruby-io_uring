@@ -114,13 +114,10 @@ mrb_io_uring_fixed_buffer_get(mrb_state *mrb, mrb_io_uring_t *mrb_io_uring)
   }
 }
 
-static mrb_value
-mrb_io_uring_return_used_buffer(mrb_state *mrb, mrb_value self)
+static void
+mrb_io_uring_return_used_buffer(mrb_state *mrb, mrb_io_uring_t *mrb_io_uring, mrb_value operation)
 {
-  mrb_value operation;
-  mrb_get_args(mrb, "o", &operation);
   mrb_data_check_type(mrb, operation, &mrb_io_uring_operation_type);
-  mrb_io_uring_t *mrb_io_uring = (mrb_io_uring_t *) DATA_PTR(self);
   mrb_value index_val = mrb_iv_get(mrb, operation, MRB_SYM(buf_index));
   mrb_int index = mrb_as_int(mrb, index_val);
   if (unlikely(!mrb_string_p(mrb_ary_ref(mrb, mrb_io_uring->buffers, index)))) {
@@ -131,6 +128,15 @@ mrb_io_uring_return_used_buffer(mrb_state *mrb, mrb_value self)
   mrb_iv_remove(mrb, operation, MRB_SYM(buf));
   mrb_iv_remove(mrb, operation, MRB_SYM(buf_index));
 
+}
+
+static mrb_value
+mrb_io_uring_return_used_buffer_m(mrb_state *mrb, mrb_value self)
+{
+  mrb_io_uring_t *mrb_io_uring = (mrb_io_uring_t *) DATA_PTR(self);
+  mrb_value operation;
+  mrb_get_args(mrb, "o", &operation);
+  mrb_io_uring_return_used_buffer(mrb, mrb_io_uring, operation);
   return self;
 }
 
@@ -1918,8 +1924,8 @@ mrb_mruby_io_uring_gem_init(mrb_state* mrb)
   if (can_use_buffers) {
     mrb_define_method_id(mrb, io_uring_class, MRB_SYM(fixed_buffer_size),       mrb_io_uring_get_fixed_buffer_size,   MRB_ARGS_NONE());
     mrb_define_method_id(mrb, io_uring_class, MRB_SYM(prep_read_fixed),         mrb_io_uring_prep_read_fixed,         MRB_ARGS_ARG(1, 2)|MRB_ARGS_BLOCK());
-    mrb_define_method_id(mrb, io_uring_class, MRB_SYM(return_used_buffer),      mrb_io_uring_return_used_buffer,      MRB_ARGS_REQ(1));
-    mrb_define_method_id(mrb, io_uring_class, MRB_SYM(prep_write_fixed), mrb_io_uring_prep_write_fixed, MRB_ARGS_ARG(3, 2)|MRB_ARGS_BLOCK());
+    mrb_define_method_id(mrb, io_uring_class, MRB_SYM(return_used_buffer),      mrb_io_uring_return_used_buffer_m,      MRB_ARGS_REQ(1));
+    mrb_define_method_id(mrb, io_uring_class, MRB_SYM(prep_write_fixed), mrb_io_uring_prep_write_fixed, MRB_ARGS_ARG(2, 2)|MRB_ARGS_BLOCK());
   }
   mrb_define_method_id(mrb, io_uring_class,   MRB_SYM(wait),                     mrb_io_uring_submit_and_wait_timeout, MRB_ARGS_OPT(2)|MRB_ARGS_BLOCK());
 
