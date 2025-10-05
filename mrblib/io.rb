@@ -7,17 +7,9 @@ class IO::Uring
     def recv_nonblock
       raise NotImplementedError
     end
+
     def recvfrom
       raise NotImplementedError
-    end
-  end
-
-  # Für Clients wie TCPSocket, UNIXSocket
-  module ClientSocketMethods
-    include UringSocketBase
-
-    def connect(addrinfo, sqe_flags = 0, &block)
-      IO::Uring.default_io_uring.prep_connect(self, addrinfo, sqe_flags, &block)
     end
 
     def send(buf, flags = 0, sqe_flags = 0, &block)
@@ -29,7 +21,14 @@ class IO::Uring
     end
   end
 
-  # Für TCPServer, UNIXServer
+  module ClientSocketMethods
+    include UringSocketBase
+
+    def connect(addrinfo, sqe_flags = 0, &block)
+      IO::Uring.default_io_uring.prep_connect(self, addrinfo, sqe_flags, &block)
+    end
+  end
+
   module ServerSocketMethods
     include UringSocketBase
 
@@ -54,7 +53,6 @@ class IO::Uring
     end
   end
 
-  # Für UDP – kann sowohl binden als auch senden/empfangen
   module UDPSocketMethods
     include ClientSocketMethods
 
@@ -75,6 +73,10 @@ class IO::Uring
     def write(buf, offset = 0, sqe_flags = 0, &block)
       IO::Uring.default_io_uring.prep_write(self, buf, offset, sqe_flags, &block)
     end
+
+    def write_fixed(read_fixed_operation, offset = 0, sqe_flags = 0, &block)
+      IO::Uring.default_io_uring.prep_write_fixed(self, read_fixed_operation, offset, sqe_flags, &block)
+    end
   end
 
   class File < ::File
@@ -94,7 +96,6 @@ class IO::Uring
     include UringFileMethods
   end
 
-  # Einbinden in passende Klassen
   class TCPSocket < ::TCPSocket
     include ClientSocketMethods
   end
@@ -116,7 +117,6 @@ class IO::Uring
   end
 
   class Socket < ::Socket
-    include UringSocketBase
     include ClientSocketMethods
     include ServerSocketMethods
   end

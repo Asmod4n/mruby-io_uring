@@ -1,6 +1,5 @@
 #include "mrb_io_uring.h"
-#include "mruby/data.h"
-#include "mruby/string.h"
+#include "mruby/value.h"
 
 static mrb_value
 mrb_io_uring_queue_init_params(mrb_state *mrb, mrb_value self)
@@ -209,6 +208,7 @@ mrb_io_uring_build_socket(mrb_state *mrb, mrb_value self)
     break;
     default:
       mrb_raise(mrb, E_ARGUMENT_ERROR, "unknown socket type");
+      return mrb_undef_value();
   }
 
   mrb_io_uring_t *mrb_io_uring = (mrb_io_uring_t *) DATA_PTR(self);
@@ -1180,7 +1180,8 @@ mrb_statx_initialize(mrb_state *mrb, mrb_value self)
   return mrb_statx_set_instance_variables(mrb, self, &stx);
 }
 
-static inline void unset_if_not_frozen(mrb_state *mrb, mrb_value obj, const mrb_sym was_frozen_sym) {
+static void
+unset_if_not_frozen(mrb_state *mrb, mrb_value obj, const mrb_sym was_frozen_sym) {
     if (mrb_string_p(obj)) {
         mrb_value was_frozen = mrb_iv_get(mrb, obj, was_frozen_sym);
         if (!mrb_bool(was_frozen)) {
@@ -1296,8 +1297,7 @@ mrb_io_uring_for_each_cqe(mrb_state* mrb, mrb_io_uring_t* mrb_io_uring, mrb_valu
     }
 
     io_uring_cq_advance(&mrb_io_uring->ring, nr);
-  }
-  catch (...) {
+  } catch (...) {
     io_uring_cq_advance(&mrb_io_uring->ring, nr);
       if (!(cqe->flags & IORING_CQE_F_MORE)) {
         mrb_hash_delete_key(mrb, mrb_io_uring->sqes, operation);
@@ -1644,9 +1644,9 @@ mrb_io_uring_get_io_socket(mrb_state *mrb, struct RClass *base_class, mrb_int so
   return socket_obj;
 }
 
-static int is_socket(int fd) {
+static bool is_socket(int fd) {
     struct stat st;
-    if (fstat(fd, &st) == -1) return -1;
+    if (fstat(fd, &st) == -1) return false;
     return S_ISSOCK(st.st_mode);
 }
 
@@ -1666,36 +1666,30 @@ mrb_io_uring_operation_to_io(mrb_state *mrb, mrb_value self)
     }
   } else {
     mrb_raise(mrb, E_ARGUMENT_ERROR, "found no descriptor in operation to convert to IO");
-    return mrb_nil_value();
+    return mrb_undef_value();
   }
 }
 
 static mrb_value
 mrb_io_uring_socket_for_fd(mrb_state *mrb, mrb_value self)
 {
-  mrb_value io_uring, fdobj;
-  mrb_get_args(mrb, "oo", &io_uring, &fdobj);
+  mrb_value fdobj;
+  mrb_get_args(mrb, "o", &fdobj);
 
-  DATA_CHECK_GET_PTR(mrb, io_uring, &mrb_io_uring_queue_type, mrb_io_uring_t);
-  int fd = (int) mrb_integer(mrb_type_convert(mrb, fdobj, MRB_TT_INTEGER, MRB_SYM(fileno)));
-  mrb_value sock_obj = mrb_io_uring_get_io_socket(mrb, mrb_class_ptr(self), fd, 1);
-  mrb_iv_set(mrb, sock_obj, MRB_IVSYM(io_uring), io_uring);
-  return sock_obj;
+  int sockfd = (int) mrb_integer(mrb_type_convert(mrb, fdobj, MRB_TT_INTEGER, MRB_SYM(fileno)));
+  return mrb_io_uring_get_io_socket(mrb, mrb_class_ptr(self), sockfd, 1);
 }
 
 static mrb_value
 mrb_io_uring_file_for_fd(mrb_state *mrb, mrb_value self)
 {
-  mrb_value io_uring, fd;
-  mrb_get_args(mrb, "oo", &io_uring, &fd);
+  mrb_value fd;
+  mrb_get_args(mrb, "o", &fd);
 
-  DATA_CHECK_GET_PTR(mrb, io_uring, &mrb_io_uring_queue_type, mrb_io_uring_t);
-  mrb_value argv[] = {io_uring, fd};
 
-  mrb_value file_obj = mrb_obj_new(mrb, mrb_class_ptr(self), 2, argv);
+  mrb_value file_obj = mrb_obj_new(mrb, mrb_class_ptr(self), 1, &fd);
   (void)mrb_io_fileno(mrb, file_obj);
   ((struct mrb_io *)DATA_PTR(file_obj))->close_fd = 1;
-  mrb_iv_set(mrb, file_obj, MRB_IVSYM(io_uring), io_uring);
   return file_obj;
 }
 
@@ -1750,7 +1744,7 @@ mrb_io_uring_get_statx(mrb_state *mrb, mrb_value self)
 static void
 initialize_can_use_buffers_once()
 {
-  struct io_uring ring = {0};
+  struct io_uring ring = {{0}};
   struct io_uring_params params = {0};
   int ret = io_uring_queue_init_params(1, &ring, &params);
   if (ret == 0) {
@@ -2039,7 +2033,6 @@ mrb_mruby_io_uring_gem_init(mrb_state* mrb)
   mrb_define_method_id(mrb, io_uring_op_class, MRB_SYM(path),                   mrb_io_uring_get_path,  MRB_ARGS_NONE());
   mrb_define_method_id(mrb, io_uring_op_class, MRB_SYM(open_how),               mrb_io_uring_get_open_how,  MRB_ARGS_NONE());
   mrb_define_method_id(mrb, io_uring_op_class, MRB_SYM(statx),                  mrb_io_uring_get_statx,  MRB_ARGS_NONE());
-
 
   struct RClass *io_uring_file_class = mrb_define_class_under_id(mrb, io_uring_class, MRB_SYM(File), mrb_class_get_id(mrb, MRB_SYM(File)));
   MRB_SET_INSTANCE_TT(io_uring_file_class, MRB_TT_CDATA);
