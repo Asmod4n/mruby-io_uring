@@ -6,6 +6,7 @@ mrb_io_uring_queue_init_params(mrb_state *mrb, mrb_value self)
 {
   mrb_int fixed_buffer_size = MRB_IORING_DEFAULT_FIXED_BUFFER_SIZE, entries = 2048, flags = 0;
   mrb_get_args(mrb, "|iii", &fixed_buffer_size, &entries, &flags);
+
   if (unlikely(entries <= 0)) {
     mrb_raise(mrb, E_ARGUMENT_ERROR, "too few entries");
   }
@@ -41,21 +42,11 @@ mrb_io_uring_queue_init_params(mrb_state *mrb, mrb_value self)
 
     if (can_use_buffers) {
       if (fixed_buffer_size < page_size) {
-    #ifdef MRB_DEBUG
-          mrb_warn(mrb, "fixed_buffer_size '%i' too small, adjusting to page size: %i", fixed_buffer_size, page_size);
-    #endif
-          fixed_buffer_size = page_size;
+        fixed_buffer_size = page_size;
       } else if (fixed_buffer_size > (1 << 30)) {
-    #ifdef MRB_DEBUG
-          mrb_warn(mrb, "fixed_buffer_size '%i' too large, adjusting to max value: %i", fixed_buffer_size, (1 << 30));
-    #endif
-          fixed_buffer_size = (1 << 30);
+        fixed_buffer_size = (1 << 30);
       } else if (fixed_buffer_size % page_size != 0) {
-          long adjusted_fixed_buffer_size = (fixed_buffer_size / page_size) * page_size;
-    #ifdef MRB_DEBUG
-          mrb_warn(mrb, "fixed_buffer_size '%i' not a multiple of page size, adjusting to nearest multiple: %i", fixed_buffer_size, adjusted_fixed_buffer_size);
-    #endif
-          fixed_buffer_size = adjusted_fixed_buffer_size;
+        fixed_buffer_size = (fixed_buffer_size / page_size) * page_size;
       }
       unsigned int max_buffers = MIN(limit.rlim_max / fixed_buffer_size, 16384);
       ret = io_uring_register_buffers_sparse(&mrb_io_uring->ring, max_buffers);
@@ -63,8 +54,10 @@ mrb_io_uring_queue_init_params(mrb_state *mrb, mrb_value self)
         mrb_io_uring->fixed_buffer_size = (size_t) fixed_buffer_size;
         mrb_io_uring->buffers = mrb_ary_new(mrb);
         mrb_iv_set(mrb, self, MRB_SYM(buffers), mrb_io_uring->buffers);
-        mrb_io_uring->free_list = mrb_ary_new(mrb);
-        mrb_iv_set(mrb, self, MRB_SYM(free_list), mrb_io_uring->free_list);
+
+        /* NEW: free_pool as a Hash instead of Array */
+        mrb_io_uring->free_pool = mrb_hash_new(mrb);
+        mrb_iv_set(mrb, self, MRB_SYM(free_pool), mrb_io_uring->free_pool);
       } else {
         errno = -ret;
         mrb_sys_fail(mrb, "io_uring_register_buffers_sparse");
@@ -78,6 +71,7 @@ mrb_io_uring_queue_init_params(mrb_state *mrb, mrb_value self)
   return self;
 }
 
+
 static mrb_value
 mrb_io_uring_get_fixed_buffer_size(mrb_state *mrb, mrb_value self)
 {
@@ -85,27 +79,53 @@ mrb_io_uring_get_fixed_buffer_size(mrb_state *mrb, mrb_value self)
   return mrb_int_value(mrb, mrb_io_uring->fixed_buffer_size);
 }
 
+struct pop_result {
+  mrb_value key;
+  mrb_bool found;
+};
+
+static int
+pop_first_cb(mrb_state *mrb, mrb_value key, mrb_value val, void *ud)
+{
+  pop_result *res = static_cast<pop_result*>(ud);
+  res->key   = key;
+  res->found = TRUE;
+  return 1; // stop iteration immediately
+}
+
 static mrb_io_uring_fixed_buffer_t
 mrb_io_uring_fixed_buffer_get(mrb_state *mrb, mrb_io_uring_t *mrb_io_uring)
 {
-  if (RARRAY_LEN(mrb_io_uring->free_list) > 0) {
-    mrb_value index_val = mrb_ary_shift(mrb, mrb_io_uring->free_list);
-    mrb_int index = mrb_as_int(mrb, index_val);
-    mrb_io_uring_fixed_buffer_t result = {index, mrb_ary_ref(mrb, mrb_io_uring->buffers, index) };
+  // Try to reuse a buffer from the free_pool
+  if (mrb_hash_size(mrb, mrb_io_uring->free_pool) > 0) {
+    pop_result res{};
+    mrb_hash_foreach(mrb, mrb_hash_ptr(mrb_io_uring->free_pool), pop_first_cb, &res);
 
-    return result;
+    if (res.found) {
+      mrb_hash_delete_key(mrb, mrb_io_uring->free_pool, res.key);
+      mrb_int index = mrb_as_int(mrb, res.key);
+      mrb_io_uring_fixed_buffer_t result = {
+        index,
+        mrb_ary_ref(mrb, mrb_io_uring->buffers, index)
+      };
+      return result;
+    }
   }
 
+  // No free buffer available, allocate a new one
   mrb_int num_buffers = RARRAY_LEN(mrb_io_uring->buffers);
   mrb_value buffer = mrb_str_new_capa(mrb, mrb_io_uring->fixed_buffer_size - 1);
   mrb_obj_freeze(mrb, buffer);
 
   struct iovec iovec = { RSTRING_PTR(buffer), mrb_io_uring->fixed_buffer_size };
-  int ret = io_uring_register_buffers_update_tag(&mrb_io_uring->ring, num_buffers, &iovec, NULL, 1);
+  int ret = io_uring_register_buffers_update_tag(&mrb_io_uring->ring,
+                                                 num_buffers,
+                                                 &iovec,
+                                                 NULL,
+                                                 1);
   if (likely(ret == 1)) {
-    mrb_io_uring_fixed_buffer_t result = { num_buffers,  buffer };
+    mrb_io_uring_fixed_buffer_t result = { num_buffers, buffer };
     mrb_ary_push(mrb, mrb_io_uring->buffers, buffer);
-
     return result;
   } else {
     errno = -ret;
@@ -119,14 +139,16 @@ mrb_io_uring_return_used_buffer(mrb_state *mrb, mrb_io_uring_t *mrb_io_uring, mr
   mrb_data_check_type(mrb, operation, &mrb_io_uring_operation_type);
   mrb_value index_val = mrb_iv_get(mrb, operation, MRB_SYM(buf_index));
   mrb_int index = mrb_as_int(mrb, index_val);
+
   if (unlikely(!mrb_string_p(mrb_ary_ref(mrb, mrb_io_uring->buffers, index)))) {
     mrb_raise(mrb, E_TYPE_ERROR, "buf not found");
   }
 
-  mrb_ary_push(mrb, mrb_io_uring->free_list, index_val);
+  /* NEW: push into free_pool (Hash) instead of Array */
+  mrb_hash_set(mrb, mrb_io_uring->free_pool, index_val, mrb_true_value());
+
   mrb_iv_remove(mrb, operation, MRB_SYM(buf));
   mrb_iv_remove(mrb, operation, MRB_SYM(buf_index));
-
 }
 
 static mrb_value

@@ -47,7 +47,7 @@ typedef struct {
   struct RClass *operation_class;
   size_t fixed_buffer_size;
   mrb_value buffers;
-  mrb_value free_list;
+  mrb_value free_pool;
 } mrb_io_uring_t;
 
 static void
