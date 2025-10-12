@@ -1915,7 +1915,7 @@ mrb_mruby_io_uring_gem_init(mrb_state* mrb)
     mrb_ary_push(mrb, op_types, mrb_symbol_value(MRB_SYM(write)));
   }
   if (io_uring_opcode_supported(probe, IORING_OP_UNLINKAT)) {
-    mrb_define_method_id(mrb, io_uring_class, MRB_SYM(prep_unlinkat), mrb_io_uring_prep_unlinkat, MRB_ARGS_ARG(3, 1)|MRB_ARGS_BLOCK());
+    mrb_define_method_id(mrb, io_uring_class, MRB_SYM(prep_unlinkat), mrb_io_uring_prep_unlinkat, MRB_ARGS_ARG(1, 3)|MRB_ARGS_BLOCK());
     mrb_ary_push(mrb, op_types, mrb_symbol_value(MRB_SYM(unlinkat)));
   }
   if (io_uring_opcode_supported(probe, IORING_OP_ASYNC_CANCEL)) {
