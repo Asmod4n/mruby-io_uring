@@ -1318,7 +1318,7 @@ mrb_io_uring_for_each_cqe(mrb_state* mrb, mrb_io_uring_t* mrb_io_uring, mrb_valu
       if (!(cqe->flags & IORING_CQE_F_MORE)) {
         mrb_hash_delete_key(mrb, mrb_io_uring->sqes, operation);
       }
-    throw; // propagate the exception
+    throw;
   }
 
   return mrb_int_value(mrb, rc);

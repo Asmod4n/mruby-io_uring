@@ -7,7 +7,7 @@
 #include <sys/resource.h>
 #include <string.h>
 #include <sys/poll.h>
-#include <mruby/ext/io.h>
+#include <mruby/io.h>
 #include <sys/param.h>
 #include <stdlib.h>
 #include <sys/stat.h>
