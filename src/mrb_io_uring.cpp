@@ -37,7 +37,6 @@ mrb_io_uring_queue_init_params(mrb_state *mrb, mrb_value self)
   if (likely(ret == 0)) {
     mrb_io_uring->sqes = mrb_hash_new(mrb);
     mrb_iv_set(mrb, self, MRB_SYM(sqes), mrb_io_uring->sqes);
-    mrb_io_uring->operation_class = mrb_class_get_under_id(mrb, mrb_class(mrb, self), MRB_SYM(Operation));
 
     if (can_use_buffers) {
       if (fixed_buffer_size < page_size) {
@@ -191,7 +190,7 @@ mrb_io_uring_prep_socket(mrb_state *mrb, mrb_value self)
     mrb_symbol_value(MRB_IVSYM(type)), mrb_symbol_value(MRB_SYM(socket)),
     mrb_symbol_value(MRB_SYM(block)),  block
   };
-  mrb_value operation = mrb_obj_new(mrb, mrb_io_uring->operation_class, NELEMS(argv), argv);
+  mrb_value operation = mrb_obj_new(mrb, mrb_class_get_under_id(mrb, mrb_class(mrb, self), MRB_SYM(Operation)), NELEMS(argv), argv);
   uintptr_t encoded_operation = encode_operation_op(mrb, mrb_ptr(operation), MRB_IORING_OP_SOCKET);
   mrb_data_init(operation, (void *) encoded_operation, &mrb_io_uring_operation_type);
 
@@ -233,7 +232,7 @@ mrb_io_uring_build_socket(mrb_state *mrb, mrb_value self)
     mrb_symbol_value(MRB_IVSYM(type)), mrb_symbol_value(MRB_SYM(socket)),
     mrb_symbol_value(MRB_SYM(block)),  block,
   };
-  mrb_value operation = mrb_obj_new(mrb, mrb_io_uring->operation_class, NELEMS(argv), argv);
+  mrb_value operation = mrb_obj_new(mrb, mrb_class_get_under_id(mrb, mrb_class(mrb, self), MRB_SYM(Operation)), NELEMS(argv), argv);
   uintptr_t encoded_operation = encode_operation_op(mrb, mrb_ptr(operation), MRB_IORING_OP_SOCKET);
   mrb_data_init(operation, (void *) encoded_operation, &mrb_io_uring_operation_type);
 
@@ -261,7 +260,7 @@ mrb_io_uring_prep_bind(mrb_state *mrb, mrb_value self)
     mrb_symbol_value(MRB_SYM(addrinfo)), addrinfo,
     mrb_symbol_value(MRB_SYM(block)),  block
   };
-  mrb_value operation = mrb_obj_new(mrb, mrb_io_uring->operation_class, NELEMS(argv), argv);
+  mrb_value operation = mrb_obj_new(mrb, mrb_class_get_under_id(mrb, mrb_class(mrb, self), MRB_SYM(Operation)), NELEMS(argv), argv);
   uintptr_t encoded_operation = encode_operation_op(mrb, mrb_ptr(operation), MRB_IORING_OP_BIND);
   mrb_data_init(operation, (void *) encoded_operation, &mrb_io_uring_operation_type);
 
@@ -291,7 +290,7 @@ mrb_io_uring_prep_listen(mrb_state *mrb, mrb_value self)
     mrb_symbol_value(MRB_IVSYM(sock)), sock,
     mrb_symbol_value(MRB_SYM(block)), block
   };
-  mrb_value operation = mrb_obj_new(mrb, mrb_io_uring->operation_class, NELEMS(argv), argv);
+  mrb_value operation = mrb_obj_new(mrb, mrb_class_get_under_id(mrb, mrb_class(mrb, self), MRB_SYM(Operation)), NELEMS(argv), argv);
   uintptr_t encoded_operation = encode_operation_op(mrb, mrb_ptr(operation), MRB_IORING_OP_LISTEN);
   mrb_data_init(operation, (void *) encoded_operation, &mrb_io_uring_operation_type);
 
@@ -321,7 +320,7 @@ mrb_io_uring_prep_accept(mrb_state *mrb, mrb_value self)
     mrb_symbol_value(MRB_IVSYM(sock)), sock,
     mrb_symbol_value(MRB_SYM(block)), block
   };
-  mrb_value operation = mrb_obj_new(mrb, mrb_io_uring->operation_class, NELEMS(argv), argv);
+  mrb_value operation = mrb_obj_new(mrb, mrb_class_get_under_id(mrb, mrb_class(mrb, self), MRB_SYM(Operation)), NELEMS(argv), argv);
   uintptr_t encoded_operation = encode_operation_op(mrb, mrb_ptr(operation), MRB_IORING_OP_ACCEPT);
   mrb_data_init(operation, (void *) encoded_operation, &mrb_io_uring_operation_type);
 
@@ -352,7 +351,7 @@ mrb_io_uring_prep_multishot_accept(mrb_state *mrb, mrb_value self)
     mrb_symbol_value(MRB_IVSYM(sock)),  sock,
     mrb_symbol_value(MRB_SYM(block)),   block
   };
-  mrb_value operation = mrb_obj_new(mrb, mrb_io_uring->operation_class, NELEMS(argv), argv);
+  mrb_value operation = mrb_obj_new(mrb, mrb_class_get_under_id(mrb, mrb_class(mrb, self), MRB_SYM(Operation)), NELEMS(argv), argv);
   uintptr_t encoded_operation = encode_operation_op(mrb, mrb_ptr(operation), MRB_IORING_OP_ACCEPT);
   mrb_data_init(operation, (void *) encoded_operation, &mrb_io_uring_operation_type);
 
@@ -384,7 +383,7 @@ mrb_io_uring_prep_connect(mrb_state *mrb, mrb_value self)
     mrb_symbol_value(MRB_SYM(addrinfo)),  addrinfo,
     mrb_symbol_value(MRB_SYM(block)),     block
   };
-  mrb_value operation = mrb_obj_new(mrb, mrb_io_uring->operation_class, NELEMS(argv), argv);
+  mrb_value operation = mrb_obj_new(mrb, mrb_class_get_under_id(mrb, mrb_class(mrb, self), MRB_SYM(Operation)), NELEMS(argv), argv);
   uintptr_t encoded_operation = encode_operation_op(mrb, mrb_ptr(operation), MRB_IORING_OP_CONNECT);
   mrb_data_init(operation, (void *) encoded_operation, &mrb_io_uring_operation_type);
 
@@ -425,7 +424,7 @@ mrb_io_uring_prep_recv(mrb_state *mrb, mrb_value self)
     mrb_symbol_value(MRB_SYM(buf)),  buf,
     mrb_symbol_value(MRB_SYM(block)), block
   };
-  mrb_value operation = mrb_obj_new(mrb, mrb_io_uring->operation_class, NELEMS(argv), argv);
+  mrb_value operation = mrb_obj_new(mrb, mrb_class_get_under_id(mrb, mrb_class(mrb, self), MRB_SYM(Operation)), NELEMS(argv), argv);
   uintptr_t encoded_operation = encode_operation_op(mrb, mrb_ptr(operation), MRB_IORING_OP_RECV);
   mrb_data_init(operation, (void *) encoded_operation, &mrb_io_uring_operation_type);
 
@@ -456,7 +455,7 @@ mrb_io_uring_prep_splice(mrb_state *mrb, mrb_value self)
     mrb_symbol_value(MRB_IVSYM(splice_socks)), mrb_assoc_new(mrb, fd_in, fd_out),
     mrb_symbol_value(MRB_SYM(block)), block
   };
-  mrb_value operation = mrb_obj_new(mrb, mrb_io_uring->operation_class, NELEMS(argv), argv);
+  mrb_value operation = mrb_obj_new(mrb, mrb_class_get_under_id(mrb, mrb_class(mrb, self), MRB_SYM(Operation)), NELEMS(argv), argv);
   uintptr_t encoded_operation = encode_operation_op(mrb, mrb_ptr(operation), MRB_IORING_OP_SPLICE);
   mrb_data_init(operation, (void *) encoded_operation, &mrb_io_uring_operation_type);
 
@@ -491,7 +490,7 @@ mrb_io_uring_prep_send(mrb_state *mrb, mrb_value self)
   };
   mrb_obj_freeze(mrb, buf);
 
-  mrb_value operation = mrb_obj_new(mrb, mrb_io_uring->operation_class, NELEMS(argv), argv);
+  mrb_value operation = mrb_obj_new(mrb, mrb_class_get_under_id(mrb, mrb_class(mrb, self), MRB_SYM(Operation)), NELEMS(argv), argv);
   uintptr_t encoded_operation = encode_operation_op(mrb, mrb_ptr(operation), MRB_IORING_OP_SEND);
   mrb_data_init(operation, (void *) encoded_operation, &mrb_io_uring_operation_type);
 
@@ -522,7 +521,7 @@ mrb_io_uring_prep_shutdown(mrb_state *mrb, mrb_value self)
     mrb_symbol_value(MRB_IVSYM(sock)), sock,
     mrb_symbol_value(MRB_SYM(block)), block
   };
-  mrb_value operation = mrb_obj_new(mrb, mrb_io_uring->operation_class, NELEMS(argv), argv);
+  mrb_value operation = mrb_obj_new(mrb, mrb_class_get_under_id(mrb, mrb_class(mrb, self), MRB_SYM(Operation)), NELEMS(argv), argv);
   uintptr_t encoded_operation = encode_operation_op(mrb, mrb_ptr(operation), MRB_IORING_OP_SHUTDOWN);
   mrb_data_init(operation, (void *) encoded_operation, &mrb_io_uring_operation_type);
 
@@ -550,7 +549,7 @@ mrb_io_uring_prep_close(mrb_state *mrb, mrb_value self)
     mrb_symbol_value(MRB_IVSYM(sock)), sock,
     mrb_symbol_value(MRB_SYM(block)), block
   };
-  mrb_value operation = mrb_obj_new(mrb, mrb_io_uring->operation_class, NELEMS(argv), argv);
+  mrb_value operation = mrb_obj_new(mrb, mrb_class_get_under_id(mrb, mrb_class(mrb, self), MRB_SYM(Operation)), NELEMS(argv), argv);
   uintptr_t encoded_operation = encode_operation_op(mrb, mrb_ptr(operation), MRB_IORING_OP_CLOSE);
   mrb_data_init(operation, (void *) encoded_operation, &mrb_io_uring_operation_type);
 
@@ -579,7 +578,7 @@ mrb_io_uring_prep_poll_add(mrb_state *mrb, mrb_value self)
     mrb_symbol_value(MRB_IVSYM(poll_mask)),  mrb_int_value(mrb, poll_mask),
     mrb_symbol_value(MRB_SYM(block)),       block
   };
-  mrb_value operation = mrb_obj_new(mrb, mrb_io_uring->operation_class, NELEMS(argv), argv);
+  mrb_value operation = mrb_obj_new(mrb, mrb_class_get_under_id(mrb, mrb_class(mrb, self), MRB_SYM(Operation)), NELEMS(argv), argv);
   uintptr_t encoded_operation = encode_operation_op(mrb, mrb_ptr(operation), MRB_IORING_OP_POLL_ADD);
   mrb_data_init(operation, (void *) encoded_operation, &mrb_io_uring_operation_type);
 
@@ -611,7 +610,7 @@ mrb_io_uring_prep_poll_multishot(mrb_state *mrb, mrb_value self)
     mrb_symbol_value(MRB_SYM(block)),       block
   };
 
-  mrb_value operation = mrb_obj_new(mrb, mrb_io_uring->operation_class, NELEMS(argv), argv);
+  mrb_value operation = mrb_obj_new(mrb, mrb_class_get_under_id(mrb, mrb_class(mrb, self), MRB_SYM(Operation)), NELEMS(argv), argv);
   uintptr_t encoded_operation = encode_operation_op(mrb, mrb_ptr(operation), MRB_IORING_OP_POLL_MULTISHOT);
   mrb_data_init(operation, (void *) encoded_operation, &mrb_io_uring_operation_type);
 
@@ -645,7 +644,7 @@ mrb_io_uring_prep_poll_update(mrb_state *mrb, mrb_value self)
     mrb_symbol_value(MRB_IVSYM(userdata)),   mrb_iv_get(mrb, old_operation, MRB_IVSYM(userdata)),
     mrb_symbol_value(MRB_SYM(block)),       block
   };
-  mrb_value new_operation = mrb_obj_new(mrb, mrb_io_uring->operation_class, NELEMS(argv), argv);
+  mrb_value new_operation = mrb_obj_new(mrb, mrb_class_get_under_id(mrb, mrb_class(mrb, self), MRB_SYM(Operation)), NELEMS(argv), argv);
 
   uint64_t old_encoded_operation = (uint64_t) mrb_data_get_ptr(mrb, old_operation, &mrb_io_uring_operation_type);
   uint64_t new_encoded_operation = encode_operation_op(mrb, mrb_ptr(new_operation), MRB_IORING_OP_POLL_UPDATE);
@@ -687,7 +686,7 @@ mrb_io_uring_prep_openat2(mrb_state *mrb, mrb_value self)
     mrb_symbol_value(MRB_SYM(path_was_frozen)),mrb_bool_value(mrb_frozen_p((mrb_basic_ptr(path)))),
     mrb_symbol_value(MRB_SYM(block)),          block
   };
-  mrb_value operation = mrb_obj_new(mrb, mrb_io_uring->operation_class, NELEMS(argv), argv);
+  mrb_value operation = mrb_obj_new(mrb, mrb_class_get_under_id(mrb, mrb_class(mrb, self), MRB_SYM(Operation)), NELEMS(argv), argv);
   uintptr_t encoded_operation = encode_operation_op(mrb, mrb_ptr(operation), MRB_IORING_OP_OPENAT2);
   mrb_data_init(operation, (void *) encoded_operation, &mrb_io_uring_operation_type);
 
@@ -730,7 +729,7 @@ mrb_io_uring_prep_read(mrb_state *mrb, mrb_value self)
     mrb_symbol_value(MRB_SYM(buf)),     buf,
     mrb_symbol_value(MRB_SYM(block)),  block
   };
-  mrb_value operation = mrb_obj_new(mrb, mrb_io_uring->operation_class, NELEMS(argv), argv);
+  mrb_value operation = mrb_obj_new(mrb, mrb_class_get_under_id(mrb, mrb_class(mrb, self), MRB_SYM(Operation)), NELEMS(argv), argv);
   uintptr_t encoded_operation = encode_operation_op(mrb, mrb_ptr(operation), MRB_IORING_OP_READ);
   mrb_data_init(operation, (void *) encoded_operation, &mrb_io_uring_operation_type);
 
@@ -767,7 +766,7 @@ mrb_io_uring_prep_read_fixed(mrb_state *mrb, mrb_value self)
     mrb_symbol_value(MRB_SYM(buf_index)), mrb_int_value(mrb, buffer_t.index),
     mrb_symbol_value(MRB_SYM(block)),     block
   };
-  mrb_value operation = mrb_obj_new(mrb, mrb_io_uring->operation_class, NELEMS(argv), argv);
+  mrb_value operation = mrb_obj_new(mrb, mrb_class_get_under_id(mrb, mrb_class(mrb, self), MRB_SYM(Operation)), NELEMS(argv), argv);
   uintptr_t encoded_operation = encode_operation_op(mrb, mrb_ptr(operation), MRB_IORING_OP_READ_FIXED);
   mrb_data_init(operation, (void *) encoded_operation, &mrb_io_uring_operation_type);
   struct io_uring_sqe *sqe = mrb_io_uring_get_sqe(mrb, &mrb_io_uring->ring);
@@ -801,7 +800,7 @@ mrb_io_uring_prep_write(mrb_state *mrb, mrb_value self)
   };
   mrb_obj_freeze(mrb, buf);
 
-  mrb_value operation = mrb_obj_new(mrb, mrb_io_uring->operation_class, NELEMS(argv), argv);
+  mrb_value operation = mrb_obj_new(mrb, mrb_class_get_under_id(mrb, mrb_class(mrb, self), MRB_SYM(Operation)), NELEMS(argv), argv);
   uintptr_t encoded_operation = encode_operation_op(mrb, mrb_ptr(operation), MRB_IORING_OP_WRITE);
   mrb_data_init(operation, (void *) encoded_operation, &mrb_io_uring_operation_type);
 
@@ -844,7 +843,7 @@ mrb_io_uring_prep_write_fixed(mrb_state *mrb, mrb_value self)
     mrb_symbol_value(MRB_SYM(buf_index)), index_val,
     mrb_symbol_value(MRB_SYM(block)),     block
   };
-  mrb_value operation = mrb_obj_new(mrb, mrb_io_uring->operation_class, NELEMS(argv), argv);
+  mrb_value operation = mrb_obj_new(mrb, mrb_class_get_under_id(mrb, mrb_class(mrb, self), MRB_SYM(Operation)), NELEMS(argv), argv);
   uintptr_t encoded_operation = encode_operation_op(mrb, mrb_ptr(operation), MRB_IORING_OP_WRITE_FIXED);
   mrb_data_init(operation, (void *) encoded_operation, &mrb_io_uring_operation_type);
   struct io_uring_sqe *sqe = mrb_io_uring_get_sqe(mrb, &mrb_io_uring->ring);
@@ -880,7 +879,7 @@ mrb_io_uring_prep_unlinkat(mrb_state *mrb, mrb_value self)
     mrb_symbol_value(MRB_SYM(path_was_frozen)), mrb_bool_value(mrb_frozen_p((mrb_basic_ptr(path)))),
     mrb_symbol_value(MRB_SYM(block)),       block
   };
-  mrb_value operation = mrb_obj_new(mrb, mrb_io_uring->operation_class, NELEMS(argv), argv);
+  mrb_value operation = mrb_obj_new(mrb, mrb_class_get_under_id(mrb, mrb_class(mrb, self), MRB_SYM(Operation)), NELEMS(argv), argv);
   uintptr_t encoded_operation = encode_operation_op(mrb, mrb_ptr(operation), MRB_IORING_OP_UNLINKAT);
   mrb_data_init(operation, (void *) encoded_operation, &mrb_io_uring_operation_type);
 
@@ -911,7 +910,7 @@ mrb_io_uring_prep_cancel(mrb_state *mrb, mrb_value self)
     mrb_symbol_value(MRB_IVSYM(operation)),  operation,
     mrb_symbol_value(MRB_SYM(block)),       block
   };
-  mrb_value cancel_operation = mrb_obj_new(mrb, mrb_io_uring->operation_class, NELEMS(argv), argv);
+  mrb_value cancel_operation = mrb_obj_new(mrb, mrb_class_get_under_id(mrb, mrb_class(mrb, self), MRB_SYM(Operation)), NELEMS(argv), argv);
   uintptr_t encoded_operation = encode_operation_op(mrb, mrb_ptr(cancel_operation), MRB_IORING_OP_CANCEL);
   mrb_data_init(cancel_operation, (void *) encoded_operation, &mrb_io_uring_operation_type);
 
@@ -941,7 +940,7 @@ mrb_io_uring_prep_cancel_fd(mrb_state *mrb, mrb_value self)
     mrb_symbol_value(MRB_IVSYM(operation)),  operation,
     mrb_symbol_value(MRB_SYM(block)),       block
   };
-  mrb_value cancel_operation = mrb_obj_new(mrb, mrb_io_uring->operation_class, NELEMS(argv), argv);
+  mrb_value cancel_operation = mrb_obj_new(mrb, mrb_class_get_under_id(mrb, mrb_class(mrb, self), MRB_SYM(Operation)), NELEMS(argv), argv);
   uintptr_t encoded_operation = encode_operation_op(mrb, mrb_ptr(cancel_operation), MRB_IORING_OP_CANCEL);
   mrb_data_init(cancel_operation, (void *) encoded_operation, &mrb_io_uring_operation_type);
 
@@ -991,7 +990,7 @@ mrb_io_uring_prep_statx(mrb_state *mrb, mrb_value self)
     mrb_symbol_value(MRB_SYM(statx)),         statx,
     mrb_symbol_value(MRB_SYM(block)),          block
   };
-  mrb_value operation = mrb_obj_new(mrb, mrb_io_uring->operation_class, NELEMS(argv), argv);
+  mrb_value operation = mrb_obj_new(mrb, mrb_class_get_under_id(mrb, mrb_class(mrb, self), MRB_SYM(Operation)), NELEMS(argv), argv);
   uintptr_t encoded_operation = encode_operation_op(mrb, mrb_ptr(operation), MRB_IORING_OP_STATX);
   mrb_data_init(operation, (void *) encoded_operation, &mrb_io_uring_operation_type);
 
@@ -1693,7 +1692,12 @@ mrb_io_uring_socket_for_fd(mrb_state *mrb, mrb_value self)
   mrb_get_args(mrb, "o", &fdobj);
 
   int sockfd = (int) mrb_integer(mrb_type_convert(mrb, fdobj, MRB_TT_INTEGER, MRB_SYM(fileno)));
-  return mrb_io_uring_get_io_socket(mrb, mrb_class_ptr(self), sockfd, 1);
+  if (is_socket(sockfd)) {
+    return mrb_io_uring_get_io_socket(mrb, mrb_class_ptr(self), sockfd, 1);
+  } else {
+    mrb_raise(mrb, E_TYPE_ERROR, "not a socket");
+    return mrb_undef_value();
+  }
 }
 
 static mrb_value

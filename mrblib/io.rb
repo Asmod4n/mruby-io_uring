@@ -1,6 +1,12 @@
 class IO::Uring
   class << self
-    attr_accessor :default_io_uring
+    def default_io_uring
+      @@default_io_uring ||= IO::Uring.new
+    end
+
+    def default_io_uring=(io_uring)
+      @@default_io_uring = io_uring
+    end
   end
 
   module UringSocketBase

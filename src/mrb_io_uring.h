@@ -44,7 +44,6 @@ typedef struct {
   struct io_uring ring;
   struct io_uring_params params;
   mrb_value sqes;
-  struct RClass *operation_class;
   size_t fixed_buffer_size;
   mrb_value buffers;
   mrb_value free_pool;
