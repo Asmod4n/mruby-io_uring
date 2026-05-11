@@ -47,6 +47,7 @@ typedef struct {
   size_t fixed_buffer_size;
   mrb_value buffers;
   mrb_value free_pool;
+  struct RClass *op_class;
 } mrb_io_uring_t;
 
 static void
@@ -89,57 +90,57 @@ enum mrb_io_uring_op {
   MRB_IORING_OP_WRITE_FIXED
 };
 
-static inline void* decode_operation_inline(uintptr_t packed_value) {
-    size_t ptr_bits = sizeof(void*) * 8;
-    size_t op_bits  = 8;
-    uintptr_t ptr_mask = ((uintptr_t)1 << (ptr_bits - op_bits)) - 1;
-    return (void*)(packed_value & ptr_mask);
-}
-
-static inline enum mrb_io_uring_op decode_op_inline(uintptr_t packed_value) {
-    size_t ptr_bits = sizeof(void*) * 8;
-    size_t op_bits  = 8;
-    return (enum mrb_io_uring_op)(packed_value >> (ptr_bits - op_bits));
-}
-
-static inline uintptr_t encode_operation_op_inline(mrb_state *mrb,
-                                                   void *ptr,
-                                                   enum mrb_io_uring_op op) {
-    size_t ptr_bits = sizeof(void*) * 8;
-    size_t op_bits  = 8;
-    uintptr_t ptr_mask = ((uintptr_t)1 << (ptr_bits - op_bits)) - 1;
-    return ((uintptr_t)ptr & ptr_mask) | ((uintptr_t)op << (ptr_bits - op_bits));
-}
-
+/*
+ * Per-operation header passed to io_uring as user_data.
+ *
+ * `op` is at offset 0 by design. The CQE handler dispatches on this
+ * field and then immediately reads `op_obj` to recover the mruby
+ * Operation, so a single load from the head of the cache line gets us
+ * everything we need — no bit manipulation, no address-space
+ * assumption, works on every CPU Linux supports.
+ */
 typedef struct {
-    void *ptr;
     enum mrb_io_uring_op op;
-} PointerWithOp;
-
-static inline void* decode_operation_heap(uintptr_t packed_value) {
-    return ((PointerWithOp *)packed_value)->ptr;
-}
-
-static inline enum mrb_io_uring_op decode_op_heap(uintptr_t packed_value) {
-    return ((PointerWithOp *)packed_value)->op;
-}
-
-static inline uintptr_t encode_operation_op_heap( mrb_state *mrb,
-                                                  void *ptr,
-                                                  enum mrb_io_uring_op op) {
-    PointerWithOp *pwo = (PointerWithOp *) mrb_malloc(mrb, sizeof(PointerWithOp));
-    pwo->ptr = ptr;
-    pwo->op  = op;
-    return (uintptr_t)pwo;
-}
-
-uintptr_t (*encode_operation_op)(mrb_state*, void*, enum mrb_io_uring_op);
-void* (*decode_operation)(uintptr_t);
-enum mrb_io_uring_op (*decode_op)(uintptr_t);
+    void *op_obj;  /* RBasic* of the Operation mruby object */
+} mrb_io_uring_op_data_t;
 
 static struct mrb_data_type mrb_io_uring_operation_type = {
   "$i_mrb_io_uring_operation_type", mrb_free
 };
+
+/*
+ * Allocate an Operation in one shot. Equivalent to Data_Make_Struct,
+ * but the macro's `static const strct zero = { 0 }; *(sval) = zero;`
+ * doesn't compile in C++ for this struct (first field is an enum, no
+ * implicit int->enum conversion) — and that copy would be wasted
+ * anyway since we overwrite both fields immediately.
+ *
+ * Allocate the RData first with NULL payload so it's already
+ * arena-rooted before the payload alloc happens; if mrb_malloc
+ * raises, dfree(mrb_free) on NULL is a no-op. Then inline what the
+ * old Ruby-side `initialize` did — iterate (sym, value) pairs into
+ * the ivar table. C callers are trusted, so the per-pair type checks
+ * are gone.
+ */
+static inline mrb_value
+mrb_io_uring_op_alloc(mrb_state *mrb, struct RClass *op_class,
+                      enum mrb_io_uring_op op,
+                      const mrb_value *argv, mrb_int argc)
+{
+    struct RData *rdata = mrb_data_object_alloc(mrb, op_class, NULL,
+                                                &mrb_io_uring_operation_type);
+    mrb_io_uring_op_data_t *data =
+        (mrb_io_uring_op_data_t *) mrb_malloc(mrb, sizeof(*data));
+    data->op     = op;
+    data->op_obj = rdata;
+    rdata->data  = data;
+
+    mrb_value op_val = mrb_obj_value(rdata);
+    for (mrb_int i = 0; i + 1 < argc; i += 2) {
+      mrb_iv_set(mrb, op_val, mrb_symbol(argv[i]), argv[i + 1]);
+    }
+    return op_val;
+}
 
 static const struct mrb_data_type mrb_io_uring_open_how_type = {
   "$i_mrb_io_uring_open_how_type", mrb_free
