@@ -1241,41 +1241,58 @@ mrb_io_uring_for_each_cqe(mrb_state* mrb, mrb_io_uring_t* mrb_io_uring, mrb_valu
   unsigned int nr = 0;
   mrb_value operation = mrb_nil_value();
 
-  try {
+  typedef struct {
+    mrb_io_uring_t* mrb_io_uring;
+    mrb_value block;
+    struct io_uring_cqe* cqe;
+    int rc;
+    unsigned int* nr;
+    mrb_value* operation;
+  } Ctx;
+
+  Ctx ctx = { mrb_io_uring, block, cqe, rc, &nr, &operation };
+
+  mrb_bool error = FALSE;
+  mrb_value result = mrb_protect_error(mrb, [](mrb_state* mrb, void* data) -> mrb_value {
+    auto ctx = static_cast<Ctx*>(data);
+
     unsigned head;
     int arena_index = mrb_gc_arena_save(mrb);
-    const mrb_bool use_block = mrb_type(block) == MRB_TT_PROC;
+    const mrb_bool use_block = mrb_type(ctx->block) == MRB_TT_PROC;
 
-    io_uring_for_each_cqe(&mrb_io_uring->ring, head, cqe) {
-      nr++;
+    io_uring_for_each_cqe(&ctx->mrb_io_uring->ring, head, ctx->cqe) {
+      (*ctx->nr)++;
 
-      operation = mrb_io_uring_process_cqe(mrb, mrb_io_uring, cqe);
+      *ctx->operation = mrb_io_uring_process_cqe(mrb, ctx->mrb_io_uring, ctx->cqe);
 
-      mrb_value prep_block = mrb_iv_get(mrb, operation, MRB_SYM(block));
+      mrb_value prep_block = mrb_iv_get(mrb, *ctx->operation, MRB_SYM(block));
 
       if (mrb_type(prep_block) == MRB_TT_PROC) {
-        mrb_yield(mrb, prep_block, operation);
+        mrb_yield(mrb, prep_block, *ctx->operation);
       }
       if (use_block) {
-        mrb_yield(mrb, block, operation);
+        mrb_yield(mrb, ctx->block, *ctx->operation);
       }
-      if (!(cqe->flags & IORING_CQE_F_MORE)) {
-        mrb_hash_delete_key(mrb, mrb_io_uring->sqes, operation);
+      if (!(ctx->cqe->flags & IORING_CQE_F_MORE)) {
+        mrb_hash_delete_key(mrb, ctx->mrb_io_uring->sqes, *ctx->operation);
       }
 
       mrb_gc_arena_restore(mrb, arena_index);
     }
 
+    io_uring_cq_advance(&ctx->mrb_io_uring->ring, *ctx->nr);
+    return mrb_int_value(mrb, ctx->rc);
+  }, &ctx, &error);
+
+  if (error) {
     io_uring_cq_advance(&mrb_io_uring->ring, nr);
-  } catch (...) {
-    io_uring_cq_advance(&mrb_io_uring->ring, nr);
-      if (!(cqe->flags & IORING_CQE_F_MORE)) {
-        mrb_hash_delete_key(mrb, mrb_io_uring->sqes, operation);
-      }
-    throw;
+    if (!(cqe->flags & IORING_CQE_F_MORE)) {
+      mrb_hash_delete_key(mrb, mrb_io_uring->sqes, operation);
+    }
+    mrb_exc_raise(mrb, result);
   }
 
-  return mrb_int_value(mrb, rc);
+  return result;
 }
 
 
