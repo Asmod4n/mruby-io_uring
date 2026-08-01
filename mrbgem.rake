@@ -1,24 +1,43 @@
-require_relative 'mrblib/version.rb'
+require_relative 'version.rb'
 
 MRuby::Gem::Specification.new('mruby-io-uring') do |spec|
   spec.license = 'Apache-2.0'
   spec.author  = 'Hendrik Beskow'
   spec.summary = 'io_uring for mruby'
-  spec.version = IO::Uring::VERSION
+  spec.version = IO_URING_VERSION
   spec.add_dependency 'mruby-io'
   spec.add_dependency 'mruby-socket'
   spec.add_dependency 'mruby-errno'
-  unless File.file? "#{spec.build_dir}/build/lib/liburing.a"
+
+  liburing_lib = "#{spec.build_dir}/build/lib/liburing.a"
+  liburing_buildable = File.file?(liburing_lib)
+  unless liburing_buildable
     command = "mkdir -p #{spec.build_dir}/build && cd #{spec.dir}/deps/liburing/ && ./configure "
     if spec.cc.flags.any? { |entry| entry.is_a?(String) && entry.start_with?("-fsanitize=") }
       command << "--enable-sanitizer"
     end
     command << " --prefix=\"#{spec.build_dir}/build\" --cc=\"#{spec.cc.command}\" --cxx=\"#{spec.cxx.command}\" && make -j$(nproc) && make install && make clean"
-    sh command
+    # Block form: like liburing's own configure script, actually attempt the
+    # build and see what it returns, rather than assuming success. Passing a
+    # block makes Rake's sh NOT raise on a nonzero exit -- a build host that
+    # can't build liburing (missing kernel headers, no C++17 compiler, ...)
+    # is handled below by building without io_uring support instead of
+    # aborting the entire mruby build over one gem.
+    sh(command) { |ok, _status| liburing_buildable = ok }
   end
-  ENV['PKG_CONFIG_PATH'] = "#{spec.build_dir}/build/lib/pkgconfig:" + (ENV['PKG_CONFIG_PATH'] || '')
-  spec.cc.flags += [`pkg-config --cflags liburing`.strip]
-  spec.cxx.flags += [`pkg-config --cflags liburing`.strip]
-  spec.linker.flags_after_libraries += ["#{spec.build_dir}/build/lib/liburing.a"]
+
+  if liburing_buildable
+    # Tells src/mrb_io_uring.h and src/mrb_io_uring.cpp they can actually
+    # #include liburing.h and compile the real gem_init -- see the comment
+    # at the top of mrb_io_uring.h for how that's used.
+    spec.cc.defines  << 'MRB_IO_URING_BUILDABLE'
+    spec.cxx.defines << 'MRB_IO_URING_BUILDABLE'
+    ENV['PKG_CONFIG_PATH'] = "#{spec.build_dir}/build/lib/pkgconfig:" + (ENV['PKG_CONFIG_PATH'] || '')
+    spec.cc.flags += [`pkg-config --cflags liburing`.strip]
+    spec.cxx.flags += [`pkg-config --cflags liburing`.strip]
+    spec.linker.flags_after_libraries += [liburing_lib]
+  else
+    warn "mruby-io-uring: could not build liburing on this host (see the build output above) -- building without io_uring support; URING_AVAILABLE will always be false."
+  end
   spec.cxx.flags << '-std=c++17'
 end

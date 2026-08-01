@@ -2,6 +2,21 @@
 #define _LARGEFILE64_SOURCE
 #define _GNU_SOURCE
 
+/*
+ * mrbgem.rake defines MRB_IO_URING_BUILDABLE only after it has actually
+ * run liburing's own ./configure && make on this build host and gotten a
+ * real liburing.a out of it. Everything below that depends on liburing
+ * (or on liburing having built successfully) is guarded on it, so a
+ * build host that can't build liburing -- missing kernel headers, no
+ * C++17 compiler, whatever -- still produces a working mruby binary:
+ * see the #else branch of mrb_mruby_io_uring_gem_init in
+ * mrb_io_uring.cpp for what that binary exposes instead.
+ */
+#include <mruby.h>
+#include <mruby/presym.h>
+
+#ifdef MRB_IO_URING_BUILDABLE
+
 #include <liburing.h>
 #include <pthread.h>
 #include <sys/resource.h>
@@ -20,7 +35,6 @@
 #include <sys/syscall.h>
 #include <netinet/in.h>
 
-#include <mruby.h>
 #include <mruby/data.h>
 #include <mruby/hash.h>
 #include <mruby/variable.h>
@@ -28,7 +42,6 @@
 #include <mruby/ext/io_uring.h>
 #include <mruby/string.h>
 #include <mruby/class.h>
-#include <mruby/presym.h>
 #include <mruby/error.h>
 
 #ifndef NSEC_PER_SEC
@@ -159,3 +172,5 @@ static mrb_bool can_use_buffers = FALSE;
 #ifndef MRB_UNSET_FROZEN_FLAG
 #define MRB_UNSET_FROZEN_FLAG(o) ((o)->frozen = 0)
 #endif
+
+#endif // MRB_IO_URING_BUILDABLE

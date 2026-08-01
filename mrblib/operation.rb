@@ -1,3 +1,11 @@
+# See the top of io.rb (and mrb_io_uring.cpp) for what URING_AVAILABLE is
+# and why this guard exists: without it, `class IO; class Uring; ...` below
+# would add an Operation class -- and, unlike io.rb's `class IO::Uring`
+# form, this one doesn't even require IO::Uring to already exist first, so
+# it would define IO::Uring::Operation with real, working attr_readers
+# regardless of native availability.
+if URING_AVAILABLE
+
 class IO
   class Uring
     class Operation
@@ -49,3 +57,5 @@ class IO
     end
   end
 end
+
+end # URING_AVAILABLE

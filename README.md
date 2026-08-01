@@ -6,6 +6,35 @@ Requirements
 ============
 This is only working with a linux kernel and works best with a Kernel 6 or newer.
 
+Runtime availability
+=====================
+Not every machine this gem gets embedded on can actually use io_uring at
+runtime -- an old kernel (ENOSYS), or a seccomp profile/sysctl that blocks
+it (EPERM/EACCES), are normal, expected outcomes, not bugs. Rather than
+aborting the whole interpreter on startup when that happens, this gem
+probes io_uring once during `mrb_open()` and exposes the result as a plain
+top-level `URING_AVAILABLE` boolean.
+
+When `URING_AVAILABLE` is `false`, `IO::Uring` is not defined at all --
+check `URING_AVAILABLE`, not `defined?(IO::Uring)`, wherever your code
+(including other gems) needs to know whether it can use this gem.
+
+```ruby
+if URING_AVAILABLE
+  uring = IO::Uring.new
+  # ...
+else
+  # fall back to something else, or skip io_uring-dependent features
+end
+```
+
+The same applies if the *build* host itself can't build liburing (missing
+Linux kernel headers, no C++17-capable compiler, cross-compiling for a
+target without a matching sysroot, etc.) -- mrbgem.rake attempts liburing's
+own `./configure && make`, and if that fails, the rest of your mruby build
+still succeeds; you just end up with `URING_AVAILABLE` hardcoded to `false`
+in that build, same as above.
+
 Installation
 ============
 The gem is called mruby-io-uring for adding it to your project, here is an example.
