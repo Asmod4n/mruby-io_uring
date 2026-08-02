@@ -1657,8 +1657,12 @@ mrb_io_uring_file_for_fd(mrb_state *mrb, mrb_value self)
   mrb_value fd;
   mrb_get_args(mrb, "o", &fd);
 
-
-  mrb_value file_obj = mrb_obj_new(mrb, mrb_class_ptr(self), 1, &fd);
+  /* self is IO::Uring itself (this is registered there, same as
+   * socket_for_fd) -- construct File *nested under* self, not self
+   * directly, or calling this as IO::Uring.file_for_fd would try to
+   * build another IO::Uring ring instance instead of an IO::Uring::File. */
+  struct RClass *file_class = mrb_class_get_under_id(mrb, mrb_class_ptr(self), MRB_SYM(File));
+  mrb_value file_obj = mrb_obj_new(mrb, file_class, 1, &fd);
   (void)mrb_io_fileno(mrb, file_obj);
   ((struct mrb_io *)DATA_PTR(file_obj))->close_fd = 1;
   return file_obj;
@@ -2018,10 +2022,15 @@ mrb_mruby_io_uring_gem_init(mrb_state* mrb)
 
   struct RClass *io_uring_file_class = mrb_define_class_under_id(mrb, io_uring_class, MRB_SYM(File), mrb_class_get_id(mrb, MRB_SYM(File)));
   MRB_SET_INSTANCE_TT(io_uring_file_class, MRB_TT_CDATA);
-  mrb_define_module_function_id(mrb, io_uring_file_class, MRB_SYM(for_fd), mrb_io_uring_file_for_fd, MRB_ARGS_REQ(2));
   struct RClass *io_uring_socket_class = mrb_define_class_under_id(mrb, io_uring_class, MRB_SYM(Socket), mrb_class_get_id(mrb, MRB_SYM(Socket)));
   MRB_SET_INSTANCE_TT(io_uring_socket_class, MRB_TT_CDATA);
-  mrb_define_module_function_id(mrb, io_uring_socket_class, MRB_SYM(for_fd), mrb_io_uring_socket_for_fd, MRB_ARGS_REQ(2));
+  /* self here is unambiguously IO::Uring -- mrb_class_ptr(self) is exactly
+   * the namespace File/TCPSocket/UNIXSocket/... live under, no outer-class
+   * lookup needed. IO::Uring::File.for_fd/IO::Uring::Socket.for_fd (io.rb)
+   * are thin Ruby-level delegators to these, not second native bindings,
+   * so neither is ever called with self set to anything else. */
+  mrb_define_module_function_id(mrb, io_uring_class, MRB_SYM(file_for_fd), mrb_io_uring_file_for_fd, MRB_ARGS_REQ(1));
+  mrb_define_module_function_id(mrb, io_uring_class, MRB_SYM(socket_for_fd), mrb_io_uring_socket_for_fd, MRB_ARGS_REQ(1));
 }
 
 #else // MRB_IO_URING_BUILDABLE
