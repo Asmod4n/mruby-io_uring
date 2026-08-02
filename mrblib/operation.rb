@@ -9,8 +9,15 @@ if URING_AVAILABLE
 class IO
   class Uring
     class Operation
-      attr_reader :ring, :type, :sock, :splice_socks, :poll_mask, :file, :fileno, :directory, :operation, :res, :flags, :errno
+      attr_reader :ring, :type, :splice_socks, :poll_mask, :file, :fileno, :directory, :operation, :res, :flags, :errno
       attr_accessor :userdata
+
+      # A plain writer, not just attr_reader, so ServerSocketMethods#accept
+      # (io.rb) can upgrade #sock from the bare accepted-fd Integer the
+      # native layer sets it to into the properly classed, async-capable
+      # TCPSocket/UNIXSocket/... instance #to_io/.for_fd already knows how
+      # to build. The raw fd stays available via #fileno regardless.
+      attr_accessor :sock
 
       def buffer?
         flags & CQE_F_BUFFER != 0
