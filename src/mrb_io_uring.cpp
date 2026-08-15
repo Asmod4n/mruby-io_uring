@@ -1178,7 +1178,14 @@ mrb_io_uring_process_cqe(mrb_state *mrb, mrb_io_uring_t *mrb_io_uring, struct io
         mrb_value buf = mrb_ary_ref(mrb, mrb_io_uring->buffers, index);
         if (likely(mrb_string_p(buf))) {
           struct RString *buf_str = mrb_str_ptr(buf);
-          RSTR_UNSET_SINGLE_BYTE_FLAG(buf_str);
+          /* RSTR_UNSET_SINGLE_BYTE_FLAG used to clear the cached "every
+             byte is a character" claim before new bytes landed here.
+             mruby replaced that flag with a two-bit CODERANGE field, so
+             there is no flag left to unset: RSTR_SINGLE_BYTE_P is now
+             DERIVED from the coderange and the encoding index rather
+             than stored, and a fixed buffer comes from mrb_str_new_capa
+             with its flags zeroed, which already reads as
+             MRB_STR_CODERANGE_UNKNOWN. */
           mrb_assert(cqe->res <= (RSTRING_CAPA(buf) + 1));
           RSTR_SET_LEN(buf_str, cqe->res);
         } else {
