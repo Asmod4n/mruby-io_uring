@@ -8,15 +8,34 @@ MRuby::Gem::Specification.new('mruby-io-uring') do |spec|
   spec.add_dependency 'mruby-io'
   spec.add_dependency 'mruby-socket'
   spec.add_dependency 'mruby-errno'
+  # The seam: liburing is built with slipstream underneath, so the SAME
+  # binary answers from the kernel where io_uring is allowed and from
+  # slipstream's engine where it is not - decided at runtime, per
+  # process. slipstreamio's objects carry the engine; the copy below
+  # puts its seam files where liburing's build picks them up.
+  spec.add_dependency 'mruby-slipstreamio', github: 'Asmod4n/slipstreamIO', branch: 'backend-split'
 
   liburing_lib = "#{spec.build_dir}/build/lib/liburing.a"
-  liburing_buildable = File.file?(liburing_lib)
+  seam_marker = "#{spec.build_dir}/build/.slipstream-seam"
+  liburing_buildable = File.file?(liburing_lib) && File.file?(seam_marker)
   unless liburing_buildable
+    # Dependencies resolve after this block runs, so the gem object is
+    # not askable yet - the clone is this clone's sibling in repos/.
+    slip_dir = build.gems['mruby-slipstreamio']&.dir ||
+               File.expand_path('../slipstreamIO', spec.dir)
+    raise "mruby-io-uring: no mruby-slipstreamio at #{slip_dir}" unless File.directory?(slip_dir)
+    FileUtils.cp "#{slip_dir}/src/liburing_syscall.h", "#{spec.dir}/deps/liburing/src/syscall.h"
+    FileUtils.cp "#{slip_dir}/src/liburing_arch_syscall.h", "#{spec.dir}/deps/liburing/src/"
+    FileUtils.cp "#{slip_dir}/src/slipstream_syscall.h", "#{spec.dir}/deps/liburing/src/"
     command = "mkdir -p #{spec.build_dir}/build && cd #{spec.dir}/deps/liburing/ && ./configure "
     if spec.cc.flags.any? { |entry| entry.is_a?(String) && entry.start_with?("-fsanitize=") }
       command << "--enable-sanitizer"
     end
-    command << " --prefix=\"#{spec.build_dir}/build\" --cc=\"#{spec.cc.command}\" --cxx=\"#{spec.cxx.command}\" && make -j$(nproc) && make install && make clean"
+        # ENABLE_SHARED=0: a liburing.so cannot link alone with the seam in
+    # it - the slipstream symbols live in this build's own objects, and
+    # the archive into the same binary is the shape. Nothing here ever
+    # used the .so.
+    command << " --prefix=\"#{spec.build_dir}/build\" --cc=\"#{spec.cc.command}\" --cxx=\"#{spec.cxx.command}\" && make -j$(nproc) -C src ENABLE_SHARED=0 && make install ENABLE_SHARED=0 && make -C src clean"
     # Block form: like liburing's own configure script, actually attempt the
     # build and see what it returns, rather than assuming success. Passing a
     # block makes Rake's sh NOT raise on a nonzero exit -- a build host that
@@ -24,6 +43,10 @@ MRuby::Gem::Specification.new('mruby-io-uring') do |spec|
     # is handled below by building without io_uring support instead of
     # aborting the entire mruby build over one gem.
     sh(command) { |ok, _status| liburing_buildable = ok }
+    # The marker says WHICH liburing.a this is: one whose syscalls go
+    # through the seam. An archive from before the seam is rebuilt, not
+    # trusted.
+    FileUtils.touch(seam_marker) if liburing_buildable
   end
 
   if liburing_buildable
