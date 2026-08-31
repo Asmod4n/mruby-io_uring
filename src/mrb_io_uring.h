@@ -3,19 +3,15 @@
 #define _GNU_SOURCE
 
 /*
- * mrbgem.rake defines MRB_IO_URING_BUILDABLE only after it has actually
- * run liburing's own ./configure && make on this build host and gotten a
- * real liburing.a out of it. Everything below that depends on liburing
- * (or on liburing having built successfully) is guarded on it, so a
- * build host that can't build liburing -- missing kernel headers, no
- * C++17 compiler, whatever -- still produces a working mruby binary:
- * see the #else branch of mrb_mruby_io_uring_gem_init in
- * mrb_io_uring.cpp for what that binary exposes instead.
+ * liburing here is mruby-slipstreamio's: carried there, built with the
+ * seam underneath, headers exported on that gem's include path. The
+ * same binary answers from the kernel where io_uring is allowed and
+ * from slipstream's engine where it is not - which side answered is
+ * what URING_AVAILABLE reports (:native or :shim), asked via
+ * slipstream_syscall_uses_engine in mrb_io_uring.cpp.
  */
 #include <mruby.h>
 #include <mruby/presym.h>
-
-#ifdef MRB_IO_URING_BUILDABLE
 
 #include <liburing.h>
 #include <pthread.h>
@@ -172,5 +168,3 @@ static mrb_bool can_use_buffers = FALSE;
 #ifndef MRB_UNSET_FROZEN_FLAG
 #define MRB_UNSET_FROZEN_FLAG(o) ((o)->frozen = 0)
 #endif
-
-#endif // MRB_IO_URING_BUILDABLE

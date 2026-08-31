@@ -63,10 +63,3 @@ compile_commands.json
 /.cache/
 *.mrb
 /.vscode/
-
-# Copied at build time by mrbgem.rake out of liburing's own install
-# prefix (see its comment there) so dependent gems can #include
-# <liburing.h> - build output, not tracked source. This gem's own public
-# header, include/mruby/ext/io_uring.h, stays tracked.
-/include/liburing.h
-/include/liburing/

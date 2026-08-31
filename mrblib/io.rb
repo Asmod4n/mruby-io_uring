@@ -1,17 +1,10 @@
 # URING_AVAILABLE is set by mrb_mruby_io_uring_gem_init (src/mrb_io_uring.cpp,
-# see the long comment at its top) before mrblib loads, based on whether this
-# machine can actually create an io_uring instance right now. When false,
-# native gem_init already skipped defining any method on IO::Uring, and this
-# file skips too, so nothing here ever adds a method either.
-#
-# Check URING_AVAILABLE, not `defined?(IO::Uring)`, wherever this needs
-# checking (including from other gems, e.g. webmachine-mruby's adapter) --
-# it's the constant this gem defines and guarantees for exactly this
-# purpose. See mrb_io_uring.cpp's comment at the top of gem_init for why:
-# every file that touches IO::Uring, including this one, has to guard its
-# whole body the same way for `defined?(IO::Uring)` to be trustworthy too.
-if URING_AVAILABLE
-
+# see the comment at its top) before mrblib loads. It names WHICH side of
+# the slipstream seam answers this process: :native when the kernel's
+# io_uring takes the syscalls, :shim when slipstream's engine does. Both
+# are truthy - the seam always delivers, so the old false value is gone
+# and nothing gates on the constant any more; it is reporting, for code
+# (webmachine-mruby's startup banner, tests) that wants to know.
 class IO::Uring
   class << self
     def default_io_uring
@@ -167,5 +160,3 @@ class IO::Uring
     include ServerSocketMethods
   end
 end
-
-end # URING_AVAILABLE

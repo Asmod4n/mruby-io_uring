@@ -1,6 +1,5 @@
 #include "mrb_io_uring.h"
-
-#ifdef MRB_IO_URING_BUILDABLE
+#include "slipstream_syscall.h"
 
 static mrb_value
 mrb_io_uring_queue_init_params(mrb_state *mrb, mrb_value self)
@@ -1738,55 +1737,34 @@ initialize_can_use_buffers_once()
   io_uring_queue_exit(&ring);
 }
 
-#endif // MRB_IO_URING_BUILDABLE
-
 MRB_BEGIN_DECL
-
-#ifdef MRB_IO_URING_BUILDABLE
 
 void
 mrb_mruby_io_uring_gem_init(mrb_state* mrb)
 {
   /*
-   * Checked first, before anything else: mrb_open() runs every gem's
-   * gem_init with no Ruby-level rescue in place yet, so mrb_sys_fail()
-   * here (as this used to do, further down, after IO::Uring already had
-   * a class and #initialize/#submit defined) would abort the whole
-   * interpreter rather than give the embedding program a chance to react.
-   * A kernel too old for io_uring (ENOSYS), or a seccomp profile/sysctl
-   * that blocks it (EPERM/EACCES), is a normal, expected outcome on some
-   * machines -- not a bug.
+   * URING_AVAILABLE says WHICH side of the slipstream seam answers this
+   * process: :native when the kernel's io_uring takes the syscalls,
+   * :shim when slipstream's engine does (io_uring blocked by seccomp, a
+   * sysctl, or a kernel too old). Both are truthy - with the engine as
+   * the floor there is no "io_uring unavailable" state any more, which
+   * is why the old false value is gone. The first ring opened is what
+   * decides the side, so the probe below runs before the constant is
+   * read off.
    *
-   * URING_AVAILABLE is set on Object either way, before anything else, so
-   * both this function and mrblib/io.rb + mrblib/operation.rb (see their
-   * own top) can gate on the exact same signal: when false, this function
-   * returns immediately without defining any method or constant on
-   * IO::Uring (including VERSION, defined natively below rather than in
-   * mrblib specifically so it can't end up as an exception to this), and
-   * those two mrblib files skip their entire body too, so nothing under
-   * IO::Uring ever gets defined at all.
-   *
-   * `defined?(IO::Uring)` is consequently a reliable "is this usable"
-   * signal too, but URING_AVAILABLE remains the constant this gem defines
-   * and documents for that purpose: every file that touches IO::Uring has
-   * to individually remember to guard itself for `defined?(IO::Uring)` to
-   * hold, and one forgetting (e.g. a bare version-string constant, easy
-   * to assume is harmless) would break it silently, whereas
-   * URING_AVAILABLE can't be wrong by omission the same way. Note this
-   * has nothing to do with presym: presym'ing a name via MRB_SYM() (as
-   * `Uring` is right here) interns the symbol table entry but does not by
-   * itself cause mruby to instantiate anything for it.
-   *
-   * io_uring_get_probe() already does exactly the availability check this
-   * needs internally (io_uring_queue_init() on a scratch ring, torn down
-   * again immediately) and returns NULL on failure; the result is reused
-   * below instead of probing twice.
+   * io_uring_get_probe() opens a scratch ring through the seam and asks
+   * IORING_REGISTER_PROBE - the kernel fills it on :native, the engine
+   * fills it from its backend's carried opcode list on :shim, and the
+   * result gates the opcode constants below either way. NULL now means
+   * a genuinely broken host (fd or memory exhaustion), an error to
+   * raise, not a state to encode.
    */
   struct io_uring_probe *probe = io_uring_get_probe();
-  mrb_define_const_id(mrb, mrb->object_class, MRB_SYM(URING_AVAILABLE), mrb_bool_value(probe != NULL));
   if (!probe) {
-    return;
+    mrb_raise(mrb, E_RUNTIME_ERROR, "io_uring_get_probe failed: neither the kernel nor slipstream's engine could open a ring");
   }
+  mrb_define_const_id(mrb, mrb->object_class, MRB_SYM(URING_AVAILABLE),
+                      mrb_symbol_value(mrb_intern_lit(mrb, slipstream_syscall_uses_engine() ? "shim" : "native")));
 
   pthread_mutex_lock(&mutex);
   if (init_once_done == FALSE) {
@@ -2039,26 +2017,6 @@ mrb_mruby_io_uring_gem_init(mrb_state* mrb)
   mrb_define_module_function_id(mrb, io_uring_class, MRB_SYM(file_for_fd), mrb_io_uring_file_for_fd, MRB_ARGS_REQ(1));
   mrb_define_module_function_id(mrb, io_uring_class, MRB_SYM(socket_for_fd), mrb_io_uring_socket_for_fd, MRB_ARGS_REQ(1));
 }
-
-#else // MRB_IO_URING_BUILDABLE
-
-void
-mrb_mruby_io_uring_gem_init(mrb_state* mrb)
-{
-  /*
-   * mrbgem.rake could not build liburing on this host -- missing kernel
-   * headers, no C++17-capable compiler, or some other prerequisite
-   * ./configure && make needs was not met (see the build log for what
-   * actually failed). URING_AVAILABLE is still defined, just always
-   * false, so mrblib/io.rb and mrblib/operation.rb -- which key off this
-   * exact same constant -- behave exactly as they do when a working
-   * liburing probes unavailable at runtime instead: IO::Uring is not
-   * defined at all, and nothing here crashes.
-   */
-  mrb_define_const_id(mrb, mrb->object_class, MRB_SYM(URING_AVAILABLE), mrb_false_value());
-}
-
-#endif // MRB_IO_URING_BUILDABLE
 
 void mrb_mruby_io_uring_gem_final(mrb_state* mrb) {}
 MRB_END_DECL
