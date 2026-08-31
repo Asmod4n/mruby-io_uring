@@ -1763,8 +1763,14 @@ mrb_mruby_io_uring_gem_init(mrb_state* mrb)
   if (!probe) {
     mrb_raise(mrb, E_RUNTIME_ERROR, "io_uring_get_probe failed: neither the kernel nor slipstream's engine could open a ring");
   }
+  /* Two whole mrb_intern_lit calls, not one with a ternary inside:
+   * mrb_intern_lit sizes its literal with sizeof, and a ternary decays
+   * both arms to const char* - sizeof gives 7 and the symbol carries
+   * NUL plus stray bytes past the short arm. Measured, not theory. */
   mrb_define_const_id(mrb, mrb->object_class, MRB_SYM(URING_AVAILABLE),
-                      mrb_symbol_value(mrb_intern_lit(mrb, slipstream_syscall_uses_engine() ? "shim" : "native")));
+                      mrb_symbol_value(slipstream_syscall_uses_engine()
+                                         ? mrb_intern_lit(mrb, "shim")
+                                         : mrb_intern_lit(mrb, "native")));
 
   pthread_mutex_lock(&mutex);
   if (init_once_done == FALSE) {
